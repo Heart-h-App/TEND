@@ -23,6 +23,7 @@
   let emailInput: HTMLInputElement;
   let pendingModalOpen = false;
   let pendingNodeSelect = '';
+  let debounceTimer: NodeJS.Timeout | null = null;
 
   function isValidEmail(email: string): boolean {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -209,13 +210,30 @@
     };
   });
 
+  // Debounced function to check for existing data
+  function debouncedCheckData() {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+    
+    debounceTimer = setTimeout(() => {
+      if (email && isValidEmail(email)) {
+        checkForExistingMap();
+        checkForExistingNorthStar();
+        checkForExistingExperiments();
+        saveUserEmail();
+      }
+    }, 800); // 800ms delay
+  }
+
   // Check for existing data when email changes
   $: if (email) {
-    checkForExistingMap();
-    checkForExistingNorthStar();
-    checkForExistingExperiments();
-    saveUserEmail();
+    debouncedCheckData();
   } else {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+    }
     mapData = null;
     northStarData = null;
     experimentsData = null;
@@ -326,11 +344,6 @@
       bind:this={emailInput}
       on:input={() => { 
         emailError = '';
-        if (isValidEmail(email)) {
-          checkForExistingMap(); 
-          checkForExistingNorthStar();
-          checkForExistingExperiments();
-        }
       }}
       placeholder="Enter your email"
       class:error={emailError}
