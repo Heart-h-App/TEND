@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum RelStatus {
+  on_track
+  strained
+}
+
+model Relationship {
+  id          String    @id @default(cuid())
+  ownerEmail  String
+  name        String
+  description String
+  status      RelStatus
+  details     Json       // stores { "+": "...", "∆": "...", "→": "..." }
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model NorthStar {
+  id          String   @id @default(cuid())
+  ownerEmail  String   @unique
+  haiku       String
+  north       Json
+  east        Json
+  south       Json
+  west        Json
+  metaVersion Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Experiment {
+  id          String   @id @default(cuid())
+  ownerEmail  String
+  challenge   String
+  hypothesis  String
+  intervention String
+  measure     String
+  learnings   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
