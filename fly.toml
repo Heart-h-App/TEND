@@ -1,5 +1,5 @@
 app = "tend"
-primary_region = "sjc"
+primary_region = "ord"
 
 [build]
 
