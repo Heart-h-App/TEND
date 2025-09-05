@@ -11,7 +11,10 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"format": "prettier --write .",
-		"lint": "prettier --check . && eslint ."
+		"lint": "prettier --check . && eslint .",
+		"start": "node build",
+		"db:migrate": "prisma migrate deploy",
+		"db:generate": "prisma generate"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.2.5",
