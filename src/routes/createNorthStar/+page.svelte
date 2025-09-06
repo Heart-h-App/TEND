@@ -189,11 +189,6 @@
         <h2>Your North Star</h2>
         <Diagram star={result} />
       </div>
-
-      <div class="card">
-        <h2>Raw Result</h2>
-        <pre style="font-size: 0.9em; overflow: auto; background-color: var(--input-bg); padding: 1rem; border-radius: 4px;">{JSON.stringify(result, null, 2)}</pre>
-      </div>
     {/if}
   </div>
 </main>
