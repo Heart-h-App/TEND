@@ -13,7 +13,7 @@
   };
 
   let email = '';
-  let mapData: Rel | null = null;
+  let mapData: any = null;
   let loadingMap = false;
   let northStarData: any = null;
   let loadingNorthStar = false;
@@ -22,8 +22,15 @@
   let emailError = '';
   let emailInput: HTMLInputElement;
   let pendingModalOpen = false;
-  let pendingNodeSelect = '';
+  let pendingNodeSelect = 'connection';
   let debounceTimer: NodeJS.Timeout | null = null;
+  let showMapModal = false;
+  let selectedNode: any = null;
+  let showNorthStarModal = false;
+  let isLargeScreen = true;
+  let showInlineTray = false;
+  let inlineTrayNode: any = null;
+
 
   function isValidEmail(email: string): boolean {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -60,16 +67,22 @@
       return;
     }
     
-    // Navigate with email parameter or show modal
+    // Navigate with email parameter or show modal/inline based on screen size
     if (tileType === 'map') {
       if (mapData) {
-        showMapModal = true;
+        if (isLargeScreen) {
+          showMapModal = true;
+        }
+        // On smaller screens (<1000px), do nothing - diagram is already visible in tile
       } else {
         goto(`/mapConnection?email=${encodeURIComponent(email)}`);
       }
     } else if (tileType === 'northstar') {
       if (northStarData) {
-        showNorthStarModal = true;
+        if (isLargeScreen) {
+          showNorthStarModal = true;
+        }
+        // On smaller screens (<1000px), do nothing - north star is already visible in tile
       } else {
         goto(`/createNorthStar?email=${encodeURIComponent(email)}`);
       }
@@ -111,6 +124,49 @@
       loadingMap = false;
     }
   }
+
+  // Open the Map Relationship modal or inline tray exactly once when we:
+  // 1) saw the "open intent" flag, and
+  // 2) have loaded the map data.
+  $: if (pendingModalOpen && mapData) {
+    if (isLargeScreen) {
+      showMapModal = true;
+      
+      // Optional: preselect which node to show in the side panel
+      if (pendingNodeSelect === 'connection') {
+        selectedNode = {
+          id: 'connection',
+          label: mapData.name,
+          name: mapData.name,
+          description: mapData.description,
+          status: mapData.status,
+          details: mapData.details
+        };
+      } else if (pendingNodeSelect === 'you') {
+        selectedNode = { id: 'you', label: 'You', name: 'You', description: '' };
+      } else {
+        selectedNode = null;
+      }
+    } else {
+      // On small screens, show inline tray
+      if (pendingNodeSelect === 'connection') {
+        inlineTrayNode = {
+          id: 'connection',
+          label: mapData.name,
+          name: mapData.name,
+          description: mapData.description,
+          status: mapData.status,
+          details: mapData.details
+        };
+        showInlineTray = true;
+      }
+    }
+
+    // one-shot
+    pendingModalOpen = false;
+    pendingNodeSelect = 'connection';
+  }
+
 
   async function checkForExistingNorthStar() {
     if (!email.trim()) {
@@ -166,47 +222,44 @@
     }
   }
 
+
+  // Check screen size
+  function checkScreenSize() {
+    isLargeScreen = window.innerWidth >= 1000;
+  }
+
   // Initialize email from URL parameters on mount
   onMount(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const emailFromUrl = urlParams.get('email');
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    const sp = new URLSearchParams(window.location.search);
+
+    const emailFromUrl = sp.get('email');
     if (emailFromUrl && isValidEmail(emailFromUrl)) {
       email = emailFromUrl;
     }
-    
-    // Check for modal parameters
-    const openModal = urlParams.get('openModal');
-    const selectNode = urlParams.get('selectNode');
-    
-    if (openModal === 'true' && selectNode) {
+
+    const wantsOpen = sp.get('openModal') === 'true';
+    pendingNodeSelect = sp.get('selectNode') ?? 'connection';
+
+    if (wantsOpen) {
+      // 1) Stage the intent
       pendingModalOpen = true;
-      pendingNodeSelect = selectNode;
-      // Clean up URL parameters immediately
-      const newUrl = new URL(window.location.href);
-      newUrl.searchParams.delete('openModal');
-      newUrl.searchParams.delete('selectNode');
-      window.history.replaceState({}, '', newUrl.toString());
+
+      // 2) Eager-load so the reactive block can fire ASAP
+      checkForExistingMap();
+      checkForExistingNorthStar?.();
+      checkForExistingExperiments?.();
+
+      // 3) Clean the one-shot flags (keep ?email)
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete('openModal');
+      clean.searchParams.delete('selectNode');
+      history.replaceState({}, '', clean);
     }
 
-    // Global escape key handler
-    const handleGlobalEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (showMapModal) {
-          if (selectedNode) {
-            selectedNode = null;
-          } else {
-            closeMapModal();
-          }
-        } else if (showNorthStarModal) {
-          closeNorthStarModal();
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleGlobalEscape);
-    
     return () => {
-      document.removeEventListener('keydown', handleGlobalEscape);
+      window.removeEventListener('resize', checkScreenSize);
     };
   });
 
@@ -256,9 +309,6 @@
 
   let showDeleteConfirmation = false;
   let deletingAccount = false;
-  let showMapModal = false;
-  let selectedNode: any = null;
-  let showNorthStarModal = false;
 
   function handleDeleteAccount() {
     if (!isValidEmail(email)) {
@@ -282,7 +332,17 @@
   }
 
   function handleNodeSelect(event: CustomEvent) {
-    selectedNode = event.detail;
+    if (isLargeScreen) {
+      selectedNode = event.detail;
+    } else {
+      inlineTrayNode = event.detail;
+      showInlineTray = true;
+    }
+  }
+
+  function closeInlineTray() {
+    showInlineTray = false;
+    inlineTrayNode = null;
   }
 
   async function confirmDelete() {
@@ -371,16 +431,20 @@
         <p class="tile-description">
           Map your important people
         </p>
-        <div class="tile-preview">
+        <div class="tile-preview" class:has-side-panel={showInlineTray && !isLargeScreen}>
           {#if loadingMap}
             <div class="loading-state">Loading...</div>
           {:else if mapData}
-            <div class="real-diagram">
+            <div class="diagram-container">
               <Diagram 
                 nodes={[
                   { 
                     id: 'you', 
-                    label: 'You', 
+                    label: 'You',
+                    name: 'You',
+                    description: '',
+                    status: undefined,
+                    details: {},
                     x: 50, 
                     y: 50,
                     width: 300,
@@ -390,6 +454,10 @@
                     id: 'connection', 
                     label: mapData.name, 
                     desc: mapData.description,
+                    name: mapData.name,
+                    description: mapData.description,
+                    status: mapData.status,
+                    details: mapData.details,
                     x: 450, 
                     y: 50,
                     width: 300,
@@ -399,8 +467,46 @@
                 edges={[
                   { id: 'main-connection', source: 'you', target: 'connection', status: mapData.status }
                 ]}
+                on:nodeSelect={handleNodeSelect}
               />
+              
             </div>
+            
+            <!-- Side drawer for smaller screens -->
+            {#if showInlineTray && !isLargeScreen && inlineTrayNode}
+              <div class="tile-side-panel">
+                <button
+                  class="panel-close-btn"
+                  on:click={closeInlineTray}
+                  aria-label="Close details"
+                >
+                  ✕
+                </button>
+
+                <h4>{inlineTrayNode.name}</h4>
+                {#if inlineTrayNode.description}
+                  <div class="panel-description">{inlineTrayNode.description}</div>
+                {/if}
+
+                {#if inlineTrayNode.status}
+                  <div class="panel-status">
+                    <span class="panel-status-label">Status:</span> 
+                    <span class="status-indicator status-{inlineTrayNode.status.replace(' ', '-')}">{inlineTrayNode.status}</span>
+                  </div>
+                {/if}
+
+                {#if inlineTrayNode.details}
+                  <div class="panel-insights">
+                    {#each Object.entries(inlineTrayNode.details) as [label, text]}
+                      <div class="panel-insight-item">
+                        <div class="panel-insight-label">{label}</div>
+                        <div class="panel-insight-text">{text}</div>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            {/if}
           {:else}
             <div class="placeholder-content">
               <div class="placeholder-diagram">
@@ -1733,6 +1839,136 @@
 
     .star-item-large {
       font-size: 0.75rem;
+    }
+  }
+
+  /* Tile Side Panel Styles for Smaller Screens (<1000px) */
+  .tile-preview.has-side-panel {
+    display: flex;
+    gap: 0;
+  }
+
+  .diagram-container {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .tile-side-panel {
+    width: 300px;
+    background-color: var(--input-bg);
+    border-left: 1px solid var(--input-border);
+    padding: 1rem;
+    overflow-y: auto;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .panel-close-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 1.1em;
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s ease;
+  }
+
+  .panel-close-btn:hover {
+    background-color: var(--input-border);
+  }
+
+  .tile-side-panel h4 {
+    margin: 0 0 0.75rem 0;
+    color: var(--heading);
+    font-size: 1.1rem;
+    padding-right: 2rem;
+  }
+
+  .panel-description {
+    font-size: 0.9em;
+    margin-bottom: 0.75rem;
+    color: var(--text);
+    line-height: 1.4;
+  }
+
+  .panel-status {
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+
+  .panel-status-label {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 0.85rem;
+  }
+
+  .panel-insights {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .panel-insight-item {
+    background-color: var(--bg);
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    margin: 0;
+  }
+
+  .panel-insight-label {
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+    color: var(--heading);
+    font-size: 0.9em;
+  }
+
+  .panel-insight-text {
+    color: var(--text);
+    line-height: 1.3;
+    font-size: 0.85rem;
+  }
+
+  /* Responsive adjustments for tile side panel */
+  @media (max-width: 700px) {
+    .tile-side-panel {
+      width: 250px;
+      padding: 0.75rem;
+    }
+
+    .tile-side-panel h4 {
+      font-size: 1rem;
+    }
+
+    .panel-description,
+    .panel-insight-text {
+      font-size: 0.8rem;
+    }
+
+    .panel-insight-label {
+      font-size: 0.85rem;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .tile-side-panel {
+      width: 220px;
+      padding: 0.6rem;
+    }
+
+    .tile-side-panel h4 {
+      font-size: 0.95rem;
     }
   }
 </style>
