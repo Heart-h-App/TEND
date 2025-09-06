@@ -52,6 +52,7 @@
     const tileType = target?.getAttribute('data-tile');
     
     if (!isValidEmail(email)) {
+      emailError = 'Please enter a valid email';
       emailInput.focus();
       return;
     }
