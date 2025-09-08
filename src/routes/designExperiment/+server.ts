@@ -100,7 +100,6 @@ export async function POST({ request }) {
     console.log('=== DESIGN EXPERIMENT REQUEST ===');
     console.log('Owner Email:', ownerEmail || 'Not provided');
     console.log('Original Text:', text);
-    console.log('Contextual Info:', contextualInfo || 'None');
     console.log('Full User Message to Model:');
     console.log(userMessage);
     console.log('=====================================');

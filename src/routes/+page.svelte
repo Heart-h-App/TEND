@@ -229,10 +229,31 @@
     isLargeScreen = window.innerWidth >= 1000;
   }
 
+  // Handle escape key for modals
+  function handleEscapeKey(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      if (showMapModal && selectedNode) {
+        // First escape: close side drawer in map modal
+        selectedNode = null;
+      } else if (showMapModal) {
+        // Second escape: close map modal
+        closeMapModal();
+      } else if (showNorthStarModal) {
+        closeNorthStarModal();
+      } else if (showDeleteConfirmation) {
+        cancelDelete();
+      } else if (showInlineTray) {
+        closeInlineTray();
+      }
+    }
+  }
+
   // Initialize email from URL parameters on mount
   onMount(() => {
     checkScreenSize();
     window.addEventListener('resize', checkScreenSize);
+    window.addEventListener('keydown', handleEscapeKey);
+    
     const sp = new URLSearchParams(window.location.search);
 
     const emailFromUrl = sp.get('email');
@@ -261,6 +282,7 @@
 
     return () => {
       window.removeEventListener('resize', checkScreenSize);
+      window.removeEventListener('keydown', handleEscapeKey);
     };
   });
 
@@ -384,17 +406,6 @@
   }
 </script>
 
-<section id="hero" style="min-height: 40px; margin-bottom: 16px; margin-top: 32px; border-bottom: 1px solid white;">
-  <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 16px;">
-    <img src="/hearth-logo.png" alt="Heart(h) Logo" style="width: 80px; height: auto; flex-shrink: 0;">
-    <div>
-      <h1 style="margin: 0 0 8px 0; color: var(--heading);">Welcome to Heart(h)!</h1>
-      <p style="margin: 0; font-style: italic; color: var(--text);">
-        Heart(h) software helps you connect with yourself and others, finding more joy and satisfaction with less grind and overwhelm
-      </p>
-    </div>
-  </div>
-</section>
 
 <main class="container">
   <div class="dashboard-header">
@@ -663,7 +674,7 @@
 
 <!-- Relationship Map Modal -->
 {#if showMapModal && mapData}
-  <div class="modal-backdrop" on:click={closeMapModal} role="dialog" aria-modal="true" tabindex="-1">
+  <div class="modal-backdrop" on:click={closeMapModal} on:keydown={(e) => e.key === 'Escape' && closeMapModal()} role="dialog" aria-modal="true" tabindex="-1">
     <div class="map-modal" role="document" on:click|stopPropagation>
       <div class="map-modal-header">
         <h2>🗺️ Relationship Map</h2>
@@ -712,6 +723,7 @@
         <button
           class="modal-backdrop-tray"
           on:click={() => (selectedNode = null)}
+          on:keydown={(e) => e.key === 'Escape' && (selectedNode = null)}
           aria-label="Close details"
         ></button>
 
@@ -758,7 +770,7 @@
 
 <!-- North Star Modal -->
 {#if showNorthStarModal && northStarData}
-  <div class="modal-backdrop" on:click={closeNorthStarModal} role="dialog" aria-modal="true" tabindex="-1">
+  <div class="modal-backdrop" on:click={closeNorthStarModal} on:keydown={(e) => e.key === 'Escape' && closeNorthStarModal()} role="dialog" aria-modal="true" tabindex="-1">
     <div class="northstar-modal" role="document" on:click|stopPropagation>
       <div class="northstar-modal-header">
         <h2>⭐ North Star</h2>
@@ -983,6 +995,16 @@
     font-size: 28px !important;
   }
 
+  /* Make relationship map diagram text larger to match North Star */
+  .diagram-container :global(.title) {
+    font-size: 28px !important;
+    font-weight: 600 !important;
+  }
+
+  .diagram-container :global(.emoji) {
+    font-size: 28px !important;
+  }
+
   /* Responsive adjustments for real diagram */
   @media (max-width: 1000px) {
     .real-diagram :global(svg) {
@@ -1002,6 +1024,15 @@
     }
     
     .real-diagram :global(.emoji) {
+      font-size: 24px !important;
+    }
+
+    /* Responsive adjustments for relationship map diagram */
+    .diagram-container :global(.title) {
+      font-size: 24px !important;
+    }
+    
+    .diagram-container :global(.emoji) {
       font-size: 24px !important;
     }
   }

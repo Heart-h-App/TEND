@@ -111,12 +111,6 @@
   }  
 </script>
 
-<section id="hero" style="min-height: 40px; margin-bottom: 16px; border-bottom: 1px solid var(--input-border);">
-  <h1>Welcome to Heart(h)!</h1>
-  <p style="font-style: italic;">
-    Heart(h)'s tools help you connect with yourself and others, finding more joy and satisfaction with less grind and overwhelm
-  </p>
-</section>
 
 <main class="container">
   <div style="display: grid; grid-template-columns: 1fr; gap: 16px;">

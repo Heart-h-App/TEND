@@ -17,7 +17,6 @@
     let error: string | null = null;
     let result: Experiment | null = null;
     let ownerEmail = '';
-    let checkingExistingExperiments = false;
     let textLimitReached = false;
 
     // Get email from URL parameters
@@ -25,44 +24,10 @@
       const emailParam = $page.url.searchParams.get('email');
       if (emailParam) {
         ownerEmail = emailParam;
-        checkForExistingExperiments();
       }
     });
   
-    async function checkForExistingExperiments() {
-      if (!ownerEmail.trim()) {
-        result = null;
-        return;
-      }
-      
-      checkingExistingExperiments = true;
-      try {
-        const res = await fetch(`/api/experiments?ownerEmail=${encodeURIComponent(ownerEmail)}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.length > 0) {
-            // Display the most recent experiment
-            result = data[0];
-          } else {
-            result = null;
-          }
-        } else {
-          result = null;
-        }
-      } catch (e) {
-        console.error('Failed to check existing experiments:', e);
-        result = null;
-      } finally {
-        checkingExistingExperiments = false;
-      }
-    }
   
-    // Reactive statement to check for existing experiments when email changes
-    $: if (ownerEmail) {
-      checkForExistingExperiments();
-    } else {
-      result = null;
-    }
   
     // Check if text limit is reached
     $: textLimitReached = text.length >= 2000;
@@ -80,25 +45,31 @@
         const res = await fetch('/designExperiment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text })
+          body: JSON.stringify({ text, ownerEmail })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error || 'Request failed');
         result = data as Experiment;
-        // TODO: Uncomment when ready to save experiments to database
-        // if (ownerEmail) {
-        //   const res2 = await fetch('/api/experiments', {
-        //     method: 'POST',
-        //     headers: { 'Content-Type': 'application/json' },
-        //     body: JSON.stringify({ ownerEmail, ...result })
-        //   });
-        //   const saved = await res2.json();
-        //   if (!res2.ok) {
-        //     console.error('Save failed:', saved?.error);
-        //   } else {
-        //     console.log('Saved experiment id:', saved.id);
-        //   }
-        // }
+        
+        // Save experiment to database
+        if (ownerEmail) {
+          try {
+            const res2 = await fetch('/api/experiments', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ownerEmail, ...result })
+            });
+            const saved = await res2.json();
+            if (!res2.ok) {
+              console.error('Save failed:', saved?.error);
+            } else {
+              console.log('Saved experiment id:', saved.id);
+            }
+          } catch (saveError) {
+            console.error('Failed to save experiment:', saveError);
+            // Don't fail the whole operation if saving fails
+          }
+        }
       } catch (e: any) {
         error = String(e?.message || e || 'Unknown error');
       } finally {
@@ -107,12 +78,6 @@
     }
 </script>
   
-  <section id="hero" style="min-height: 40px; margin-bottom: 16px; border-bottom: 1px solid var(--input-border);">
-    <h1>Welcome to Heart(h)!</h1>
-    <p style="font-style: italic;">
-      Heart(h)'s tools help you connect with yourself and others, finding more joy and satisfaction with less grind and overwhelm
-    </p>
-  </section>
   
   <main class="container">
     <div style="display: grid; grid-template-columns: 1fr; gap: 16px;">
