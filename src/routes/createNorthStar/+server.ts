@@ -28,7 +28,9 @@ Rules:
 - south = Core values guiding connections
 - west = Pitfalls or patterns to avoid
 - Each phrase should be 3-8 words, actionable and specific
-- Choose emojis that meaningfully represent each concept`;
+- Choose emojis that meaningfully represent each concept
+Your goal is to be an effective coach for the user, crafting them a north star that will help them take on challenges, establish sustainable improvement in their self- and relationship work, and craft+execute lean behavioral experiments that accelerate their learning and growth'; be an expert in informing users' north stars with resources like "How to Be an Adult in Relationship" (David Richo), "The Body Keeps the Score" (Bessel van der Kolk), "Tiny Habits" (BJ Fogg), "Atomic Habits" (James Clear), "Positive Intelligence" (Shirzad Chamine), "The Happiness Trap" (Russ Harris), "Nonviolent Communication" (Marshall Rosenberg), "Energy Medicine" (Donna Eden), Emotional Freedom Techniques (EFT), "Sensorimotor Psychotherapy" (Pat Ogden), and all the works of Brené Brown and Thich Nhat Hanh
+`;
 
 const CONTRACT = `Contract:
 { "haiku":"3-line poem\\n5-7-5 syllables\\nabout connection", 
@@ -48,7 +50,7 @@ export async function POST({ request }) {
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      temperature: 0.2,
+      temperature: 1.5,
       messages: [
         { role: 'system', content: SYSTEM },
         { role: 'user', content: `${CONTRACT}\n\nVision: ${visionText}\n\nCurrent State: ${currentText}` }

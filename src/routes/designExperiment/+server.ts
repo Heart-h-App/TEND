@@ -45,7 +45,8 @@ Rules:
 - Be an expert at choosing, based on this specific users' challenge and context 1-2 of the above resources to create a coherent experiment
 - Assume that experiments should be provocative enough to cause growth discomfort, while simple enough to bring joy and gather high-value learnings, and able to be executed by the user within minutes
 - Be simple & concise - understandable to someone who has no familiarity with somatics, psychology, or any of the reources above
-- If missing info, use brief reasonable defaults.`;
+- If missing info, use brief reasonable defaults.
+`;
 
 const CONTRACT = `Contract:
 { "challenge":"...","hypothesis":"...","intervention":"...","measure":"..."}`;
@@ -99,14 +100,13 @@ export async function POST({ request }) {
     const userMessage = `${CONTRACT}\n\nText:\n${text}${contextualInfo}`;
     console.log('=== DESIGN EXPERIMENT REQUEST ===');
     console.log('Owner Email:', ownerEmail || 'Not provided');
-    console.log('Original Text:', text);
     console.log('Full User Message to Model:');
     console.log(userMessage);
     console.log('=====================================');
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      temperature: 0.3,
+      temperature: 1.5,
       messages: [
         { role: 'system', content: SYSTEM },
         { role: 'user', content: userMessage }

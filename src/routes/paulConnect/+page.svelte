@@ -11,14 +11,48 @@
 <main class="container">
   <div class="paul-connect-page">
     <div class="hero-section">
-      <h1>Connect with paul</h1>
       <p class="subtitle">
-        Looking for more? <br> Let's explore how we can work together.
+        Looking for more? Let's explore how we can play together.
       </p>
     </div>
 
+    <div class="cta-section">
+      <h2>Ways to Connect</h2>
+      
+      <div class="cta-cards">
+        <div class="cta-card">
+          <h3 style="margin-top: 0;">🎯 1:1 Coaching</h3>
+          <p>
+            Work with coach paul to strengthen mental & emotional fitness and use experiments to grow through challenges.
+          </p>
+          <a 
+            href="https://forms.gle/V2GyDfSpK12iTcqm9" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            class="cta-button secondary"
+          >
+            Sign up for free 1:1 session
+          </a>
+        </div>
+
+        <div class="cta-card">
+          <h3 style="margin-top: 0;">💬 Slide in my DMs</h3>
+          <p>
+            Interested in workshops, partnerships, or have questions/feedback about Heart(h)? 
+            Let's start a conversation about it!
+          </p>
+          <button 
+            on:click={openEmailCTA}
+            class="cta-button secondary"
+          >
+            Send Me an Email
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="bio-section">
-      <h2>About Heart(h) and founder, paul</h2>
+      <h2>About Heart(h)</h2>
       <div class="bio-content">
         <p>
           Hi, I'm paul hudson mack (<a href="https://www.linkedin.com/in/paul-hudson-mack-msw-3b43b310/">LinkedIn</a>).
@@ -38,40 +72,7 @@
       </div>
     </div>
 
-    <div class="cta-section">
-      <h2>Ways to Connect</h2>
-      
-      <div class="cta-cards">
-        <div class="cta-card">
-          <h3>🎯 1:1 Coaching</h3>
-          <p>
-            Work with me directly to build mental & emotional fitness, navigate specific challenges, and hone your skills using experiments to grow.
-          </p>
-          <a 
-            href="https://forms.gle/V2GyDfSpK12iTcqm9" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            class="cta-button secondary"
-          >
-            Sign Up for Coaching
-          </a>
-        </div>
-
-        <div class="cta-card">
-          <h3>💬 Other Ways to Connect</h3>
-          <p>
-            Interested in workshops, partnerships, or have questions/feedback about Heart(h)? 
-            Let's start a conversation about how we might work together.
-          </p>
-          <button 
-            on:click={openEmailCTA}
-            class="cta-button secondary"
-          >
-            Send Me an Email
-          </button>
-        </div>
-      </div>
-    </div>
+    
 
     <div class="back-section">
       <a href="/" class="back-link">← Back to TEND Dashboard</a>
@@ -182,8 +183,8 @@
 
   .cta-button.secondary {
     background-color: transparent;
-    color: var(--button-bg);
-    border: 2px solid var(--button-bg);
+    color: white;
+    border: 3px solid var(--button-bg);
   }
 
   .cta-button.secondary:hover,
