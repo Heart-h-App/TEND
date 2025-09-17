@@ -27,9 +27,17 @@
   let showMapModal = false;
   let selectedNode: any = null;
   let showNorthStarModal = false;
+  let showExperimentModal = false;
   let isLargeScreen = true;
   let showInlineTray = false;
   let inlineTrayNode: any = null;
+
+  // Experiment modal state
+  let experimentText = '';
+  let experimentLoading = false;
+  let experimentError: string | null = null;
+  let experimentResult: any = null;
+  let experimentTextLimitReached = false;
 
 
   function isValidEmail(email: string): boolean {
@@ -88,7 +96,12 @@
         goto(`/createNorthStar?email=${encodeURIComponent(email)}`);
       }
     } else if (tileType === 'experiments') {
-      goto(`/designExperiment?email=${encodeURIComponent(email)}`);
+      // If user has no experiments, show modal instead of navigating
+      if (!experimentsData || experimentsData.length === 0) {
+        showExperimentModal = true;
+      } else {
+        goto(`/designExperiment?email=${encodeURIComponent(email)}`);
+      }
     }
   }
 
@@ -208,9 +221,13 @@
       if (res.ok) {
         const data = await res.json();
         if (data.length > 0) {
-          experimentsData = data[0]; // Use most recent experiment
+          experimentsData = data;
         } else {
           experimentsData = null;
+          // Auto-trigger modal for first-time users with no experiments
+          if (isValidEmail(email) && !showExperimentModal) {
+            showExperimentModal = true;
+          }
         }
       } else {
         experimentsData = null;
@@ -240,6 +257,8 @@
         closeMapModal();
       } else if (showNorthStarModal) {
         closeNorthStarModal();
+      } else if (showExperimentModal) {
+        closeExperimentModal();
       } else if (showDeleteConfirmation) {
         cancelDelete();
       } else if (showInlineTray) {
@@ -352,6 +371,64 @@
 
   function closeNorthStarModal() {
     showNorthStarModal = false;
+  }
+
+  function closeExperimentModal() {
+    showExperimentModal = false;
+    // Reset experiment modal state
+    experimentText = '';
+    experimentError = null;
+    experimentResult = null;
+  }
+
+  // Check if experiment text limit is reached
+  $: experimentTextLimitReached = experimentText.length >= 2000;
+
+  async function designExperiment() {
+    experimentError = null;
+    experimentResult = null;
+    
+    if (!experimentText.trim()) {
+      experimentError = 'Please enter a description.';
+      return;
+    }
+    experimentLoading = true;
+    try {
+      const res = await fetch('/designExperiment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: experimentText, ownerEmail: email })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Request failed');
+      experimentResult = data;
+      
+      // Save experiment to database
+      if (email) {
+        try {
+          const res2 = await fetch('/api/experiments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ownerEmail: email, ...experimentResult })
+          });
+          const saved = await res2.json();
+          if (!res2.ok) {
+            console.error('Save failed:', saved?.error);
+          } else {
+            console.log('Saved experiment id:', saved.id);
+            // Refresh experiments data to show the new experiment
+            checkForExistingExperiments();
+          }
+        } catch (saveError) {
+          console.error('Failed to save experiment:', saveError);
+          // Don't fail the whole operation if saving fails
+        }
+      }
+    } catch (e: any) {
+      experimentError = String(e?.message || e || 'Unknown error');
+    } finally {
+      experimentLoading = false;
+    }
   }
 
   function handleNodeSelect(event: CustomEvent) {
@@ -614,8 +691,10 @@
     <div class="dashboard-tile experiments-tile" on:click={handleTileClick} on:keydown={handleKeydown} role="button" tabindex="0" class:masked={isValidEmail(email) && !experimentsData} class:locked={isValidEmail(email) && (!mapData || !northStarData)} data-tile="experiments">
       {#if isValidEmail(email) && (!mapData || !northStarData)}
         <div class="lock-icon">🔒</div>
-      {:else if isValidEmail(email) && !experimentsData}
-        <div class="lfg-button">LFG</div>
+      {:else if isValidEmail(email)}
+        <div class="lfg-button">
+          {experimentsData && experimentsData.length > 0 ? 'Create New' : 'LFG'}
+        </div>
       {/if}
       <div class="tile-header">
         <h3>🧪 Experiments</h3>
@@ -625,19 +704,127 @@
           Small steps, radical intent, real progress
         </p>
         <div class="tile-preview">
-          <div class="placeholder-content">
-            <div class="placeholder-experiment">
-              <div class="experiment-step">Challenge</div>
-              <div class="experiment-arrow">→</div>
-              <div class="experiment-step">Hypothesis</div>
-              <div class="experiment-arrow">→</div>
-              <div class="experiment-step">Intervention</div>
-              <div class="experiment-arrow">→</div>
-              <div class="experiment-step">Measure</div>
-              <div class="experiment-arrow">→</div>
-              <div class="experiment-step">Learning</div>
+          {#if loadingExperiments}
+            <div class="loading-state">Loading...</div>
+          {:else if experimentsData && experimentsData.length > 0}
+            <div class="experiments-grid-container">
+              <!-- Narrow view: Steps as rows, experiments as columns -->
+              <div class="experiments-grid narrow-view">
+                <div class="experiments-scroll-container">
+                  <table class="experiments-table">
+                    <thead>
+                      <tr>
+                        <th class="step-header"></th>
+                        {#each experimentsData as experiment, index}
+                          <th class="experiment-header" class:completed={experiment.learnings}>
+                            <div class="experiment-number">{index + 1}</div>
+                            <div class="experiment-date">{new Date(experiment.createdAt).toLocaleDateString()}</div>
+                            <div class="experiment-status-badge">
+                              {#if experiment.learnings}
+                                <span class="status completed">✓</span>
+                              {:else}
+                                <span class="status pending">⏳</span>
+                              {/if}
+                            </div>
+                          </th>
+                        {/each}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td class="step-label">Challenge</td>
+                        {#each experimentsData as experiment}
+                          <td class="experiment-cell" title={experiment.challenge}>
+                            {experiment.challenge}
+                          </td>
+                        {/each}
+                      </tr>
+                      <tr>
+                        <td class="step-label">Hypothesis</td>
+                        {#each experimentsData as experiment}
+                          <td class="experiment-cell" title={experiment.hypothesis}>
+                            {experiment.hypothesis}
+                          </td>
+                        {/each}
+                      </tr>
+                      <tr>
+                        <td class="step-label">Intervention</td>
+                        {#each experimentsData as experiment}
+                          <td class="experiment-cell" title={experiment.intervention}>
+                            {experiment.intervention}
+                          </td>
+                        {/each}
+                      </tr>
+                      <tr>
+                        <td class="step-label">Measure</td>
+                        {#each experimentsData as experiment}
+                          <td class="experiment-cell" title={experiment.measure}>
+                            {experiment.measure}
+                          </td>
+                        {/each}
+                      </tr>
+                      <tr>
+                        <td class="step-label">Learning</td>
+                        {#each experimentsData as experiment}
+                          <td class="experiment-cell" title={experiment.learnings || 'Not completed yet'}>
+                            {experiment.learnings || '—'}
+                          </td>
+                        {/each}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Wide view: Steps as columns, experiments as rows -->
+              <div class="experiments-grid wide-view">
+                <table class="experiments-table">
+                  <thead>
+                    <tr>
+                      <th class="experiment-number-header"></th>
+                      <th class="step-header">Challenge</th>
+                      <th class="step-header">Hypothesis</th>
+                      <th class="step-header">Intervention</th>
+                      <th class="step-header">Measure</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each experimentsData as experiment, index}
+                      <tr class="experiment-row" class:completed={experiment.learnings}>
+                        <td class="experiment-number">{index + 1}</td>
+                        <td class="experiment-cell" title={experiment.challenge}>
+                          {experiment.challenge}
+                        </td>
+                        <td class="experiment-cell" title={experiment.hypothesis}>
+                          {experiment.hypothesis}
+                        </td>
+                        <td class="experiment-cell" title={experiment.intervention}>
+                          {experiment.intervention}
+                        </td>
+                        <td class="experiment-cell" title={experiment.measure}>
+                          {experiment.measure}
+                        </td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          {:else}
+            <div class="placeholder-content">
+              <div class="placeholder-experiment">
+                <div class="experiment-step">Challenge</div>
+                <div class="experiment-arrow">→</div>
+                <div class="experiment-step">Hypothesis</div>
+                <div class="experiment-arrow">→</div>
+                <div class="experiment-step">Intervention</div>
+                <div class="experiment-arrow">→</div>
+                <div class="experiment-step">Measure</div>
+                <div class="experiment-arrow">→</div>
+                <div class="experiment-step">Learning</div>
+              </div>
+            </div>
+          {/if}
         </div>
       </div>
     </div>
@@ -827,6 +1014,96 @@
   </div>
 {/if}
 
+<!-- Experiment Modal -->
+{#if showExperimentModal}
+  <div class="modal-backdrop" on:click={closeExperimentModal} on:keydown={(e) => e.key === 'Escape' && closeExperimentModal()} role="dialog" aria-modal="true" tabindex="-1">
+    <div class="experiment-modal" role="document" on:click|stopPropagation>
+      <div class="experiment-modal-header">
+        <h2>🧪 Design your first experiment!</h2>
+        <button class="close-btn" on:click={closeExperimentModal} aria-label="Close modal">×</button>
+      </div>
+      <div class="experiment-modal-content">
+        <div class="experiment-form">
+          {#if !experimentResult}
+            <div class="input-group">
+              {#if experimentText}
+                <label for="experiment-challenge-text" class="floating-label">When you think about your current relationships and your goals, what's an important challenge you're facing? How are things going now? What opportunities and wins would success bring? What's currently most preventing success?</label>
+              {/if}
+              <textarea
+                id="experiment-challenge-text"
+                bind:value={experimentText}
+                placeholder={experimentText ? "" : "When you think about your current relationships and your goals, what's an important challenge you're facing? How are things going now? What opportunities and wins would success bring? What's currently most preventing success?"}
+                rows="4"
+                maxlength="2000"
+              ></textarea>
+              
+              {#if experimentTextLimitReached}
+                <p class="error">Max 2000 characters</p>
+              {/if}
+            </div>
+
+            <button on:click={designExperiment} disabled={experimentLoading}>
+              {experimentLoading ? 'Thinking…' : 'LFG'}
+            </button>
+          {/if}
+
+          {#if experimentError}
+            <p class="error">{experimentError}</p>
+          {/if}
+
+          <p style="font-style: italic; margin-top: 1rem;">
+            TEND helps you nurture connection by visualizing your important connections, setting direction for your relationships with a north star, and helping you design & run experiments to learn and grow
+          </p>
+        </div>
+
+        {#if experimentResult}
+          <div class="experiment-result">
+            <h2>Your Experiment</h2>
+            
+            <div style="margin-bottom: 1rem;">
+              <h3 style="margin-bottom: 0.5rem; color: var(--heading);">Challenge</h3>
+              <p style="margin-bottom: 1rem;">{experimentResult.challenge}</p>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+              <h3 style="margin-bottom: 0.5rem; color: var(--heading);">Hypothesis</h3>
+              <p style="margin-bottom: 1rem;">{experimentResult.hypothesis}</p>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+              <h3 style="margin-bottom: 0.5rem; color: var(--heading);">Intervention</h3>
+              <p style="margin-bottom: 1rem;">{experimentResult.intervention}</p>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+              <h3 style="margin-bottom: 0.5rem; color: var(--heading);">Measure</h3>
+              <p style="margin-bottom: 1rem;">{experimentResult.measure}</p>
+            </div>
+            
+            {#if experimentResult.learnings}
+              <div style="margin-bottom: 1rem;">
+                <h3 style="margin-bottom: 0.5rem; color: var(--heading);">Learnings</h3>
+                <p style="margin-bottom: 1rem;">{experimentResult.learnings}</p>
+              </div>
+            {/if}
+            
+            <h2>Want experiments more tailored to you?</h2>
+            <p style="font-style: italic; margin-top: 1rem;">
+              Create a map and north star and TEND will use those to hone experiments to your context and goals!
+            </p>
+            
+            <div class="experiment-result-actions">
+              <button on:click={closeExperimentModal} class="primary-btn">
+                LFG
+              </button>
+            </div>
+          </div>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   .dashboard-header {
     margin-bottom: 2rem;
@@ -850,9 +1127,16 @@
 
   .dashboard-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 1.5rem;
     margin-bottom: 2rem;
+  }
+
+  @media (max-width: 768px) {
+    .dashboard-grid {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
   }
 
   .dashboard-tile {
@@ -1396,7 +1680,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: rgba(0, 0, 0, 1.0);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -1661,6 +1945,237 @@
   .tray-insight-text {
     color: var(--text);
     line-height: 1.4;
+  }
+
+  /* Experiment Modal Styles */
+  .experiment-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--background);
+    z-index: 1001;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    width: 100vw;
+    max-width: 100vw;
+    box-sizing: border-box;
+  }
+
+  .experiment-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--background);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .experiment-modal-header h2 {
+    margin: 0;
+    color: var(--heading);
+    font-size: 1.5rem;
+  }
+
+  .close-btn {
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 2rem;
+    cursor: pointer;
+    padding: 0;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s ease;
+  }
+
+  .close-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .experiment-modal-content {
+    flex: 1;
+    padding: 2rem;
+    max-width: 800px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+
+  .experiment-form {
+    margin-bottom: 2rem;
+  }
+
+  .experiment-form h3 {
+    color: var(--heading);
+    margin-bottom: 1.5rem;
+    font-size: 1.8rem;
+    text-align: center;
+  }
+
+  .input-group {
+    margin-bottom: 1rem;
+  }
+
+  .floating-label {
+    display: block;
+    font-size: 0.9rem;
+    color: white;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+  }
+
+  .experiment-form textarea {
+    width: 100%;
+    min-height: 200px;
+    padding: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 1rem;
+    resize: vertical;
+    transition: border-color 0.2s ease;
+  }
+
+  .experiment-form textarea:focus {
+    outline: none;
+    border-color: var(--button-bg);
+  }
+
+  .experiment-form button {
+    width: 100%;
+    padding: 1rem 2rem;
+    background: var(--button-bg);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    margin-top: 1rem;
+  }
+
+  .experiment-form button:hover:not(:disabled) {
+    background: var(--button-hover);
+  }
+
+  .experiment-form button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .experiment-result {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 2rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+
+  .experiment-result h2 {
+    color: var(--heading);
+    margin-bottom: 1.5rem;
+    text-align: center;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .experiment-result h3 {
+    color: var(--heading);
+    font-size: 1.1rem;
+    font-weight: 600;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .experiment-result p {
+    color: var(--text);
+    line-height: 1.6;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    white-space: pre-wrap;
+    max-width: 100%;
+  }
+
+  .experiment-result-actions {
+    margin-top: 2rem;
+    text-align: center;
+  }
+
+  .primary-btn {
+    padding: 1rem 2rem;
+    background: var(--button-bg);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+
+  .primary-btn:hover {
+    background: var(--button-hover);
+  }
+
+  .error {
+    color: #ff6b6b;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+  }
+
+  /* Mobile responsiveness for experiment modal */
+  @media (max-width: 768px) {
+    .experiment-modal {
+      left: 0;
+      right: 0;
+    }
+
+    .experiment-modal-content {
+      padding: 1rem;
+      max-width: 100%;
+    }
+
+    .experiment-modal-header {
+      padding: 1rem;
+    }
+
+    .experiment-modal-header h2 {
+      font-size: 1.3rem;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
+    .experiment-form h3 {
+      font-size: 1.5rem;
+    }
+
+    .experiment-result {
+      padding: 1rem;
+    }
+
+    .experiment-result p {
+      font-size: 0.9rem;
+    }
   }
 
   /* Mobile responsiveness for modal */
@@ -2001,6 +2516,226 @@
 
     .tile-side-panel h4 {
       font-size: 0.95rem;
+    }
+  }
+
+  /* Experiments grid styles */
+  .experiments-grid-container {
+    width: 100%;
+  }
+
+  .experiments-grid {
+    width: 100%;
+  }
+
+  /* Show narrow view by default, hide wide view */
+  .narrow-view {
+    display: block;
+  }
+
+  .wide-view {
+    display: none;
+  }
+
+  /* Switch to wide view on larger screens */
+  @media (min-width: 1000px) {
+    .narrow-view {
+      display: none;
+    }
+
+    .wide-view {
+      display: block;
+    }
+  }
+
+  /* Narrow view styles - horizontal scrolling */
+  .experiments-scroll-container {
+    overflow-x: auto;
+    overflow-y: visible;
+    width: 100%;
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+  }
+
+  .experiments-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: fit-content;
+  }
+
+  .narrow-view .experiments-table {
+    min-width: calc(200px + 250px * var(--experiment-count, 3));
+  }
+
+  .step-header,
+  .experiment-header,
+  .experiment-number-header,
+  .status-header {
+    background-color: var(--input-bg);
+    border-bottom: 2px solid var(--input-border);
+    padding: 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--heading);
+    font-size: 0.9rem;
+  }
+
+  .step-label {
+    background-color: var(--input-bg);
+    border-right: 2px solid var(--input-border);
+    padding: 0.75rem;
+    font-weight: 600;
+    color: var(--heading);
+    font-size: 0.85rem;
+    white-space: nowrap;
+    min-width: 120px;
+  }
+
+  .experiment-header {
+    min-width: 200px;
+    text-align: center;
+    border-right: 1px solid var(--input-border);
+  }
+
+  .experiment-header.completed {
+    background-color: rgba(34, 197, 94, 0.1);
+  }
+
+  .experiment-number {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--button-bg);
+    margin-bottom: 0.25rem;
+  }
+
+  .experiment-header.completed .experiment-number {
+    color: #22c55e;
+  }
+
+  .experiment-date {
+    font-size: 0.75rem;
+    color: var(--text);
+    opacity: 0.8;
+    margin-bottom: 0.25rem;
+  }
+
+  .experiment-status-badge .status {
+    font-size: 0.9rem;
+  }
+
+  .experiment-cell {
+    padding: 0.75rem;
+    border-right: 1px solid var(--input-border);
+    border-bottom: 1px solid var(--input-border);
+    vertical-align: top;
+    font-size: 0.85rem;
+    line-height: 1.3;
+    color: var(--text);
+    max-width: 200px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .narrow-view .experiment-cell {
+    min-width: 180px;
+    max-width: 200px;
+  }
+
+  /* Wide view styles */
+  .wide-view .experiments-table {
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  .wide-view .step-header {
+    width: 12%;
+    max-width: 120px;
+  }
+
+  .wide-view .experiment-number-header {
+    width: 5%;
+    text-align: center;
+  }
+
+
+  .experiment-row {
+    transition: background-color 0.2s ease;
+  }
+
+  .experiment-row:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .experiment-row.completed {
+    background-color: rgba(34, 197, 94, 0.05);
+  }
+
+  .wide-view .experiment-number {
+    text-align: center;
+    font-weight: 700;
+    color: var(--button-bg);
+    font-size: 1rem;
+  }
+
+  .experiment-row.completed .experiment-number {
+    color: #22c55e;
+  }
+
+  .status-cell {
+    padding: 0.75rem;
+    border-right: 1px solid var(--input-border);
+    border-bottom: 1px solid var(--input-border);
+  }
+
+  .experiment-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .experiment-status {
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    display: inline-block;
+  }
+
+  .experiment-status.completed {
+    background-color: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+  }
+
+  .experiment-status.pending {
+    background-color: rgba(251, 191, 36, 0.2);
+    color: #f59e0b;
+  }
+
+  /* Mobile optimizations */
+  @media (max-width: 600px) {
+    .step-label,
+    .experiment-cell {
+      padding: 0.5rem;
+      font-size: 0.8rem;
+    }
+
+    .step-header,
+    .experiment-header {
+      padding: 0.5rem;
+      font-size: 0.8rem;
+    }
+
+    .experiment-number {
+      font-size: 1rem;
+    }
+
+    .experiment-date {
+      font-size: 0.7rem;
+    }
+
+    .narrow-view .experiment-cell {
+      min-width: 150px;
+      max-width: 180px;
     }
   }
 </style>
