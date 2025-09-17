@@ -1,8 +1,8 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import Diagram from "$lib/components/diagramConnection.svelte";
-
+  
   type Rel = {
     name: string;
     description: string;
@@ -10,6 +10,7 @@
     details: { '+': string; '∆': string; '→': string };
   };
 
+  let experimentModalContent: HTMLDivElement | null = null;
   let email = '';
   let mapData: any = null;
   let loadingMap = false;
@@ -190,6 +191,12 @@
     northStarData = null;
     experimentsData = null;
   }
+  
+  $: if (showExperimentModal) {
+    tick().then(() => {
+      experimentModalContent?.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
 
   async function saveUserEmail() {
     if (!isValidEmail(email)) return;
@@ -347,30 +354,34 @@
           {#if loadingNorthStar}
             <div class="loading-state">Loading...</div>
           {:else if northStarData}
-            <div class="placeholder-content">
-              <div class="placeholder-star">
-                <div class="star-center real-northstar-text">
-                  {#if northStarData.haiku}
-                    {#each northStarData.haiku.split(',') as line, index}
-                      <div>{line.trim()}{index < northStarData.haiku.split(',').length - 1 ? ',' : ''}</div>
-                    {/each}
-                  {:else}Essence{/if}
-                </div>
-                <div class="star-point north real-northstar-text">
-                  <div class="direction-heading">Growth</div>
-                  {#if northStarData.north}{#each northStarData.north as item}<div>{item.emoji} {item.phrase}</div>{/each}{/if}
-                </div>
-                <div class="star-point east real-northstar-text">
-                  <div class="direction-heading">Vibe</div>
-                  {#if northStarData.east}{#each northStarData.east as item}<div>{item.emoji} {item.phrase}</div>{/each}{/if}
-                </div>
-                <div class="star-point south real-northstar-text">
-                  <div class="direction-heading">Values</div>
-                  {#if northStarData.south}{#each northStarData.south as item}<div>{item.emoji} {item.phrase}</div>{/each}{/if}
-                </div>
-                <div class="star-point west real-northstar-text">
-                  <div class="direction-heading">Avoid</div>
-                  {#if northStarData.west}{#each northStarData.west as item}<div>{item.emoji} {item.phrase}</div>{/each}{/if}
+            <div class="northstar-grid-container">
+              <div class="northstar-scroll-container">
+                <div class="placeholder-content">
+                  <div class="placeholder-star">
+                    <div class="star-center real-northstar-text">
+                      {#if northStarData.haiku}
+                        {#each northStarData.haiku.split(',') as line, index}
+                          <div>{line.trim()}{index < northStarData.haiku.split(',').length - 1 ? ',' : ''}</div>
+                        {/each}
+                      {:else}Essence{/if}
+                    </div>
+                    <div class="star-point north real-northstar-text">
+                      <div class="direction-heading">Growth</div>
+                      {#if northStarData.north}{#each northStarData.north as item}<div>{item.emoji} {item.phrase}</div>{/each}{/if}
+                    </div>
+                    <div class="star-point east real-northstar-text">
+                      <div class="direction-heading">Vibe</div>
+                      {#if northStarData.east}{#each northStarData.east as item}<div>{item.emoji} {item.phrase}</div>{/each}{/if}
+                    </div>
+                    <div class="star-point south real-northstar-text">
+                      <div class="direction-heading">Values</div>
+                      {#if northStarData.south}{#each northStarData.south as item}<div>{item.emoji} {item.phrase}</div>{/each}{/if}
+                    </div>
+                    <div class="star-point west real-northstar-text">
+                      <div class="direction-heading">Avoid</div>
+                      {#if northStarData.west}{#each northStarData.west as item}<div>{item.emoji} {item.phrase}</div>{/each}{/if}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -496,7 +507,7 @@
         <h2>🧪 Design your first experiment!</h2>
         <button class="close-btn" on:click={() => (showExperimentModal = false)} aria-label="Close modal">×</button>
       </div>
-      <div class="experiment-modal-content">
+      <div class="experiment-modal-content" bind:this={experimentModalContent}>
         <div class="experiment-form">
           <p style="font-style: italic; margin-top: 1rem;">
             Experiments are the heart of how TEND helps you make progress. Small shifts in how you address important challenges in the moment help you gather powerful learnings.
@@ -732,6 +743,25 @@
 
   /* Safety: no overflow within container */
   .placeholder-star > * { max-width: 100%; }
+
+  /* North Star scroll container */
+  .northstar-grid-container {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -1rem;
+    padding: 0 1rem;
+  }
+
+  .northstar-scroll-container {
+    min-width: 300px;
+    padding: 1rem 0;
+    margin: 0 auto;
+  }
+
+  .placeholder-star {
+    min-width: 300px; /* Prevent shrinking */
+  }
 
   
   /* Experiment placeholder */
