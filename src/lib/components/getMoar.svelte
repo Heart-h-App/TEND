@@ -1,6 +1,6 @@
 <footer style="margin-top: 3rem; padding: 2rem 0; border-top: 1px solid var(--input-border); text-align: center;">
   <p style="margin-bottom: 1rem; color: var(--text); font-style: italic;">
-    Have feedback on TEND? Want to learn more, collaborate, or get help with theese tools?
+    Have feedback on TEND? Want to learn more, collaborate, or get help with these tools?
   </p>
   <a 
     href="/paulConnect" 

@@ -20,13 +20,8 @@
   let emailError = '';
   let emailInput: HTMLInputElement;
 
-  // modal flags (mobile-first: always full-screen)
-  let showMapModal = false;
-  let showNorthStarModal = false;
+  // modal flags
   let showExperimentModal = false;
-
-  // one-shot deep-link open
-  let pendingModalOpen = false;
 
   // Experiment modal state
   let experimentText = '';
@@ -47,35 +42,24 @@
     return emailRegex.test(email.trim());
   }
 
-  function handleTileClick(event: Event) {
-    const tileType = (event.currentTarget as HTMLElement)?.getAttribute('data-tile');
-
-    if (!isValidEmail(email)) {
-      emailError = 'Please enter a valid email';
-      emailInput?.focus();
-      return;
-    }
-
-    // progressive unlock
-    if (tileType === 'northstar' && !mapData) return;
-    if (tileType === 'experiments' && (!mapData || !northStarData)) return;
-
-    if (tileType === 'map') {
-      if (mapData) showMapModal = true;
-      else goto(`/mapConnection?email=${encodeURIComponent(email)}`);
-    } else if (tileType === 'northstar') {
-      if (northStarData) showNorthStarModal = true;
-      else goto(`/createNorthStar?email=${encodeURIComponent(email)}`);
-    } else if (tileType === 'experiments') {
-      if (!experimentsData || experimentsData.length === 0) showExperimentModal = true;
-      else goto(`/designExperiment?email=${encodeURIComponent(email)}`);
-    }
+  function handleLfgMap() {
+    if (!isValidEmail(email)) { emailError = 'Please enter a valid email'; emailInput?.focus(); return; }
+    goto(`/mapConnection?email=${encodeURIComponent(email)}`);
   }
 
-  function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      handleTileClick(event);
+  function handleLfgNorthStar() {
+    if (!isValidEmail(email)) { emailError = 'Please enter a valid email'; emailInput?.focus(); return; }
+    if (!mapData) return; // progressive unlock: needs a map first
+    goto(`/createNorthStar?email=${encodeURIComponent(email)}`);
+  }
+
+  function handleLfgExperiments() {
+    if (!isValidEmail(email)) { emailError = 'Please enter a valid email'; emailInput?.focus(); return; }
+    if (!mapData || !northStarData) return; // progressive unlock: needs map + north star first
+    if (!experimentsData || experimentsData.length === 0) {
+      showExperimentModal = true; // first-time: open the modal
+    } else {
+      goto(`/designExperiment?email=${encodeURIComponent(email)}`); // subsequent: route
     }
   }
 
@@ -141,12 +125,11 @@
     }
   }
 
-  // Escape to close whichever modal is open
+  // Escape to close open modal
+  
   function handleEscapeKey(event: KeyboardEvent) {
     if (event.key !== 'Escape') return;
-    if (showMapModal) showMapModal = false;
-    else if (showNorthStarModal) showNorthStarModal = false;
-    else if (showExperimentModal) {
+    if (showExperimentModal) {
       showExperimentModal = false;
       experimentText = '';
       experimentError = null;
@@ -156,36 +139,36 @@
     }
   }
 
+  // --- Global "nudge" to require a valid email on any input ---
+  function nudgeForEmail(event: Event) {
+    // Only nudge if email is not valid
+    if (isValidEmail(email)) return;
+
+    // Ignore interactions that originate on the email input itself
+    const path = (event as any).composedPath?.() ?? [];
+    const isOnEmail = path.includes(emailInput) || document.activeElement === emailInput;
+    if (isOnEmail) return;
+
+    // Show error + focus email
+    emailError = 'Please enter a valid email';
+    emailInput?.focus();
+  }
+
   onMount(() => {
     window.addEventListener('keydown', handleEscapeKey);
+    window.addEventListener('keydown', nudgeForEmail, { capture: true });
+    window.addEventListener('pointerdown', nudgeForEmail, { capture: true });
 
     const sp = new URLSearchParams(window.location.search);
     const emailFromUrl = sp.get('email');
     if (emailFromUrl && isValidEmail(emailFromUrl)) email = emailFromUrl;
 
-    const wantsOpen = sp.get('openModal') === 'true';
-    if (wantsOpen) {
-      pendingModalOpen = true;
-      checkForExistingMap();
-      checkForExistingNorthStar?.();
-      checkForExistingExperiments?.();
-
-      const clean = new URL(window.location.href);
-      clean.searchParams.delete('openModal');
-      clean.searchParams.delete('selectNode');
-      history.replaceState({}, '', clean);
-    }
-
     return () => {
+      window.removeEventListener('keydown', nudgeForEmail, { capture: true } as any);
+      window.removeEventListener('pointerdown', nudgeForEmail, { capture: true } as any);
       window.removeEventListener('keydown', handleEscapeKey);
     };
   });
-
-  // one-shot: open map modal once data is ready
-  $: if (pendingModalOpen && mapData) {
-    showMapModal = true;
-    pendingModalOpen = false;
-  }
 
   function debouncedCheckData() {
     if (debounceTimer) clearTimeout(debounceTimer);
@@ -317,8 +300,10 @@
 
   <div class="dashboard-grid">
     <!-- Relationship Map Tile -->
-    <div class="dashboard-tile" on:click={handleTileClick} on:keydown={handleKeydown} role="button" tabindex="0" class:masked={isValidEmail(email) && !mapData} data-tile="map">
-      {#if isValidEmail(email) && !mapData}<div class="lfg-button">LFG</div>{/if}
+    <div class="dashboard-tile" class:masked={isValidEmail(email) && !mapData} data-tile="map">
+      {#if isValidEmail(email) && !mapData}
+        <button class="lfg-button" on:click|stopPropagation={handleLfgMap} aria-label="Create your relationship map">LFG</button>
+      {/if}    
       <div class="tile-header"><h3>🗺️ Relationship Map</h3></div>
       <div class="tile-content">
         <p class="tile-description">Map your important people</p>
@@ -349,12 +334,12 @@
     </div>
 
     <!-- North Star Tile -->
-    <div class="dashboard-tile" on:click={handleTileClick} on:keydown={handleKeydown} role="button" tabindex="0" class:masked={isValidEmail(email) && !northStarData} class:locked={isValidEmail(email) && !mapData} data-tile="northstar">
+    <div class="dashboard-tile" class:masked={isValidEmail(email) && !northStarData} class:locked={isValidEmail(email) && !mapData} data-tile="northstar">
       {#if isValidEmail(email) && !mapData}
-        <div class="lock-icon">🔒</div>
+        <div class="lock-icon" aria-hidden="true">🔒</div>
       {:else if isValidEmail(email) && !northStarData}
-        <div class="lfg-button">LFG</div>
-      {/if}
+        <button class="lfg-button" on:click|stopPropagation={handleLfgNorthStar} aria-label="Create your north star">LFG</button>
+      {/if}    
       <div class="tile-header"><h3>⭐ North Star</h3></div>
       <div class="tile-content">
         <p class="tile-description">Set your direction</p>
@@ -405,12 +390,14 @@
     </div>
 
     <!-- Experiments Tile -->
-    <div class="dashboard-tile experiments-tile" on:click={handleTileClick} on:keydown={handleKeydown} role="button" tabindex="0" class:masked={isValidEmail(email) && !experimentsData} class:locked={isValidEmail(email) && (!mapData || !northStarData)} data-tile="experiments">
+    <div class="dashboard-tile experiments-tile" class:masked={isValidEmail(email) && !experimentsData} class:locked={isValidEmail(email) && (!mapData || !northStarData)} data-tile="experiments">
       {#if isValidEmail(email) && (!mapData || !northStarData)}
-        <div class="lock-icon">🔒</div>
+        <div class="lock-icon" aria-hidden="true">🔒</div>
       {:else if isValidEmail(email)}
-        <div class="lfg-button">{experimentsData && experimentsData.length > 0 ? 'Create New' : 'LFG'}</div>
-      {/if}
+        <button class="lfg-button" on:click|stopPropagation={handleLfgExperiments} aria-label="Create a new experiment">
+          {experimentsData && experimentsData.length > 0 ? 'Create New' : 'LFG'}
+        </button>
+      {/if}    
       <div class="tile-header"><h3>🧪 Experiments</h3></div>
       <div class="tile-content">
         <p class="tile-description">Small steps, radical intent, real progress</p>
@@ -429,10 +416,6 @@
                           <th class="experiment-header" class:completed={experiment.learnings}>
                             <div class="experiment-number">{index + 1}</div>
                             <div class="experiment-date">{new Date(experiment.createdAt).toLocaleDateString()}</div>
-                            <div class="experiment-status-badge">
-                              {#if experiment.learnings}<span class="status completed">✓</span>
-                              {:else}<span class="status pending">⏳</span>{/if}
-                            </div>
                           </th>
                         {/each}
                       </tr>
@@ -460,12 +443,6 @@
                         <td class="step-label">Measure</td>
                         {#each experimentsData as experiment}
                           <td class="experiment-cell" title={experiment.measure}>{experiment.measure}</td>
-                        {/each}
-                      </tr>
-                      <tr>
-                        <td class="step-label">Learning</td>
-                        {#each experimentsData as experiment}
-                          <td class="experiment-cell" title={experiment.learnings || 'Not completed yet'}>{experiment.learnings || '—'}</td>
                         {/each}
                       </tr>
                     </tbody>
@@ -511,71 +488,7 @@
   </div>
 {/if}
 
-<!-- Relationship Map Modal (full-screen mobile baseline) -->
-{#if showMapModal && mapData}
-  <div class="modal-backdrop" on:click={() => (showMapModal = false)} on:keydown={(e) => e.key === 'Escape' && (showMapModal = false)} role="dialog" aria-modal="true" tabindex="-1">
-    <div class="map-modal" role="document" on:click|stopPropagation>
-      <div class="map-modal-header">
-        <h2>🗺️ Relationship Map</h2>
-        <button class="close-btn" on:click={() => (showMapModal = false)} aria-label="Close modal">×</button>
-      </div>
-      <div class="map-modal-content">
-        <div class="full-screen-diagram">
-          <Diagram 
-            nodes={[
-              { id: 'you', label: 'You', name: 'You', description: '', status: undefined, details: {}, x: 50, y: 50, width: 300, height: 225 },
-              { id: 'connection', label: mapData.name, desc: mapData.description, name: mapData.name, description: mapData.description, status: mapData.status, details: mapData.details, x: 450, y: 50, width: 300, height: 225 }
-            ]}
-            edges={[{ id: 'main-connection', source: 'you', target: 'connection', status: mapData.status }]}
-          />
-        </div>
-      </div>
-    </div>
-  </div>
-{/if}
-
-<!-- North Star Modal (full-screen mobile baseline) -->
-{#if showNorthStarModal && northStarData}
-  <div class="modal-backdrop" on:click={() => (showNorthStarModal = false)} on:keydown={(e) => e.key === 'Escape' && (showNorthStarModal = false)} role="dialog" aria-modal="true" tabindex="-1">
-    <div class="northstar-modal" role="document" on:click|stopPropagation>
-      <div class="northstar-modal-header">
-        <h2>⭐ North Star</h2>
-        <button class="close-btn" on:click={() => (showNorthStarModal = false)} aria-label="Close modal">×</button>
-      </div>
-      <div class="northstar-modal-content">
-        <div class="full-screen-northstar">
-          <div class="northstar-diagram">
-            <div class="star-center-large">
-              {#if northStarData.haiku}
-                {#each northStarData.haiku.split(',') as line, index}
-                  <div>{line.trim()}{index < northStarData.haiku.split(',').length - 1 ? ',' : ''}</div>
-                {/each}
-              {:else}Essence{/if}
-            </div>
-            <div class="star-point-large north-large">
-              <div class="direction-heading-large">Growth</div>
-              {#if northStarData.north}{#each northStarData.north as item}<div class="star-item-large">{item.emoji} {item.phrase}</div>{/each}{/if}
-            </div>
-            <div class="star-point-large east-large">
-              <div class="direction-heading-large">Vibe</div>
-              {#if northStarData.east}{#each northStarData.east as item}<div class="star-item-large">{item.emoji} {item.phrase}</div>{/each}{/if}
-            </div>
-            <div class="star-point-large south-large">
-              <div class="direction-heading-large">Values</div>
-              {#if northStarData.south}{#each northStarData.south as item}<div class="star-item-large">{item.emoji} {item.phrase}</div>{/each}{/if}
-            </div>
-            <div class="star-point-large west-large">
-              <div class="direction-heading-large">Avoid</div>
-              {#if northStarData.west}{#each northStarData.west as item}<div class="star-item-large">{item.emoji} {item.phrase}</div>{/each}{/if}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-{/if}
-
-<!-- Experiment Modal (full-screen mobile baseline) -->
+<!-- Experiment Modal -->
 {#if showExperimentModal}
   <div class="modal-backdrop" on:click={() => (showExperimentModal = false)} on:keydown={(e) => e.key === 'Escape' && (showExperimentModal = false)} role="dialog" aria-modal="true" tabindex="-1">
     <div class="experiment-modal" role="document" on:click|stopPropagation>
@@ -585,6 +498,9 @@
       </div>
       <div class="experiment-modal-content">
         <div class="experiment-form">
+          <p style="font-style: italic; margin-top: 1rem;">
+            Experiments are the heart of how TEND helps you make progress. Small shifts in how you address important challenges in the moment help you gather powerful learnings.
+          </p>
           {#if !experimentResult}
             <div class="input-group">
               {#if experimentText}
@@ -638,13 +554,6 @@
               <p style="margin-bottom: 1rem;">{experimentResult.measure}</p>
             </div>
 
-            {#if experimentResult.learnings}
-              <div style="margin-bottom: 1rem;">
-                <h3 style="margin-bottom: 0.5rem; color: var(--heading);">Learnings</h3>
-                <p style="margin-bottom: 1rem;">{experimentResult.learnings}</p>
-              </div>
-            {/if}
-
             <h2>Want experiments more tailored to you?</h2>
             <p style="font-style: italic; margin-top: 1rem;">
               Create a map and north star and TEND will use those to hone experiments to your context and goals!
@@ -664,8 +573,6 @@
   /* ===== Minimal overflow fixes ===== */
   *, *::before, *::after { box-sizing: border-box; } /* prevents hover-border growth from changing size */
 
-  /* ===== Mobile-first baseline (single view for all sizes) ===== */
-
   .container { padding: 0 1rem; }
   .dashboard-header { margin-bottom: 2rem; }
   .dashboard-header input { margin-top: 0.5rem; max-width: 300px; }
@@ -679,7 +586,6 @@
     border: 1px solid var(--input-border);
     border-radius: 8px;
     padding: 1rem;
-    cursor: pointer;
     transition: all .2s ease;
     position: relative;
     max-width: 100%;          /* never exceed grid column */
@@ -693,12 +599,15 @@
   .dashboard-tile.locked:hover { transform: none; box-shadow: 0 2px 8px rgba(0,0,0,.2); border: 2px solid var(--input-border); }
 
   .lfg-button, .lock-icon {
-    position: absolute; top: 12px; left: 12px; z-index: 2; pointer-events: none;
+    position: absolute; top: 12px; left: 12px; z-index: 2;
   }
   .lfg-button {
     font-family: 'Mulish', sans-serif; font-weight: 600; font-size: 1em;
     padding: 8px 16px; border: none; border-radius: 4px; background-color: var(--button-bg); color: #fff;
+    pointer-events: auto; cursor: pointer;
   }
+  .lfg-button:focus { outline: 2px solid var(--button-hover); outline-offset: 2px; }
+
   .lock-icon { font-size: 1.5em; color: #888; }
 
   .tile-header { display: flex; justify-content: center; align-items: center; margin-bottom: 1rem; }
@@ -717,7 +626,7 @@
   .diagram-container { width: 100%; max-width: 100%; overflow: hidden; }
   .diagram-container :global(svg) { display: block; max-width: 100%; height: auto; }
 
-  /* Diagram typography at mobile size */
+  /* Diagram typography */
   .diagram-container :global(.title) { font-size: 24px !important; font-weight: 600 !important; }
   .diagram-container :global(.emoji) { font-size: 24px !important; }
 
@@ -727,27 +636,104 @@
   .placeholder-connection { flex:none; width: 30px; height: 2px; background: var(--input-border); margin: 0; position: relative; }
   .placeholder-connection::after { content:''; position:absolute; right:-6px; top:-4px; border-left:8px solid var(--input-border); border-top:5px solid transparent; border-bottom:5px solid transparent; }
 
-  /* North Star (mobile sizes) */
-  .placeholder-star { position: relative; width: 312px; height: 240px; margin: 0 auto; max-width: 100%; } /* constrain when populated */
-  .star-center {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 96px; height: 48px; border: 2px dashed var(--input-border); border-radius: 30px;
-    display:flex; align-items:center; justify-content:center; font-size:.84rem; color: var(--text); text-align:center; padding:.3rem;
+  
+  /* North Star */
+  
+  /* Turn container into a 3x3 grid with center in the middle */
+  .placeholder-star {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: auto auto auto;
+  grid-template-areas:
+    ". north ."
+    "west center east"
+    ". south .";
+  align-items: center;
+  justify-items: center;
+  gap: 0.75rem 1rem;
+
+  width: min(100%, 520px);
+  height: auto;          /* let content define height */
+  margin: 0 auto;
+  padding: 0.5rem 0.75rem;
+  position: relative;    /* no absolute children anymore */
   }
-  .star-point { position: absolute; width: 66px; height: 29px; border: 1px dashed var(--input-border); border-radius: 17px; display:flex; align-items:center; justify-content:center; font-size:.84rem; color: var(--text); text-align:center; padding:.3rem; }
-  .star-point.north { top: 15px; left: 50%; transform: translateX(-50%); }
-  .star-point.east { right: 2px; top: 50%; transform: translateY(-50%); }
-  .star-point.south { bottom: 15px; left: 50%; transform: translateX(-50%); }
-  .star-point.west { left: 2px; top: 50%; transform: translateY(-50%); }
+  
+  /* Map each box to its grid area */
+  .star-center { grid-area: center; }
+  .star-point.north { grid-area: north; }
+  .star-point.east  { grid-area: east; }
+  .star-point.south { grid-area: south; }
+  .star-point.west  { grid-area: west; }
 
-  /* Real north star text style */
+  /* Remove absolute layout */
+  .star-center,
+  .star-point {
+    position: static;
+    transform: none;
+  }
+
+  /* Placeholder look (same visual, grid-based now) */
+  .star-center {
+    width: 96px; height: 48px;
+    border: 2px dashed var(--input-border);
+    border-radius: 30px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:.84rem; color: var(--text); text-align:center; padding:.3rem;
+  }
+  .star-point {
+    width: 66px; height: 29px;
+    border: 1px dashed var(--input-border);
+    border-radius: 17px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:.84rem; color: var(--text); text-align:center; padding:.3rem;
+}
+
+  /* Real north star (tile) */
   .star-center.real-northstar-text,
-  .star-point.real-northstar-text { background: var(--input-bg); border: 1.5px solid var(--input-border); border-radius: 12px; color: #fff; }
-  .star-center.real-northstar-text { width: 121px; height: 71.5px; padding: .4rem; font-size: .65rem !important; line-height: 1.2; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; }
-  .star-point.real-northstar-text { width: 110px; height: 65px; padding: .4rem; line-height: 1.1; flex-direction: column; align-items: flex-start; text-align: left; }
-  .real-northstar-text { font-size: .5rem !important; color: #fff !important; }
-  .direction-heading { font-weight: bold; font-size: .45rem !important; margin-bottom: .1rem; color:#888 !important; text-align:center !important; width:100%; display:block; }
+  .star-point.real-northstar-text {
+    background: var(--input-bg);
+    border: 1.5px solid var(--input-border);
+    border-radius: 12px;
+    color: #fff;
+  }
 
+  .star-center.real-northstar-text {
+    width: clamp(120px, 26vw, 220px);
+    min-height: 70px;
+    padding: .5rem .6rem;
+    font-size: .65rem !important;
+    line-height: 1.25;
+    display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;
+  }
+
+  .star-point.real-northstar-text {
+    padding: .55rem .6rem;
+    line-height: 1.15;
+    display:flex; flex-direction: column; align-items: flex-start; text-align: left;
+    word-wrap: break-word; overflow-wrap: anywhere;
+  }
+
+  /* North/South wider; East/West taller */
+  .star-point.real-northstar-text.north,
+  .star-point.real-northstar-text.south {
+    width: clamp(160px, 40vw, 280px);
+    min-height: 70px;
+  }
+  .star-point.real-northstar-text.east,
+  .star-point.real-northstar-text.west {
+    width: clamp(120px, 28vw, 200px);
+    min-height: clamp(90px, 24vw, 160px);
+  }
+
+  /* Typography */
+  .real-northstar-text { font-size: .52rem !important; color: #fff !important; }
+  .direction-heading   { font-weight: 700; font-size: .48rem !important; margin-bottom: .2rem; color:#888 !important; width:100%; text-align:center !important; }
+
+  /* Safety: no overflow within container */
+  .placeholder-star > * { max-width: 100%; }
+
+  
   /* Experiment placeholder */
   .placeholder-experiment { display:flex; flex-direction: column; gap:.5rem; padding:.5rem; align-items:center; }
   .experiment-step { width: 78px; height: 42px; border: 2px dashed var(--input-border); border-radius: 10px; display:flex; align-items:center; justify-content:center; font-size:.84rem; color: var(--text); text-align:center; padding:.3rem; }
@@ -772,39 +758,6 @@
   .confirm-delete-btn:hover { background: #8a3a32; }
   .confirm-delete-btn:disabled, .cancel-btn:disabled { opacity: .6; cursor: not-allowed; }
 
-  /* Map & North Star full-screen modals (mobile baseline for all) */
-  .map-modal, .northstar-modal {
-    background: var(--bg); border-radius: 0; width: 100%; height: 100%; box-shadow: 0 8px 32px rgba(0,0,0,.4);
-    display:flex; flex-direction:column; overflow:hidden; position: relative;
-  }
-  .map-modal-header, .northstar-modal-header {
-    display:flex; justify-content:space-between; align-items:center; padding: 1rem; border-bottom: 1px solid var(--input-border); background: var(--card-bg, #1a1a1a);
-  }
-  .map-modal-header h2, .northstar-modal-header h2 { margin: 0; color: var(--heading); font-size: 1.5rem; }
-  .close-btn { background: none; border: none; font-size: 2rem; color: var(--text); cursor: pointer; width: 40px; height: 40px; display:flex; align-items:center; justify-content:center; border-radius: 50%; transition: background-color .2s ease; }
-  .close-btn:hover { background: var(--input-border); }
-
-  .map-modal-content, .northstar-modal-content { flex: 1; display:flex; overflow:hidden; }
-  .full-screen-diagram, .full-screen-northstar { flex:1; padding: 1rem; display:flex; align-items:center; justify-content:center; background: var(--bg); }
-
-  .full-screen-diagram :global(.title), .full-screen-diagram :global(.emoji) { font-size: 28px !important; }
-  .northstar-diagram { position: relative; width: 450px; height: 400px; margin: 0 auto; }
-  .star-center-large {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 140px; height: 80px; background: var(--input-bg); border: 2px solid var(--input-border); border-radius: 16px;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:.9rem; color:#fff; text-align:center; padding:.8rem; line-height:1.3;
-  }
-  .star-point-large {
-    position: absolute; background: var(--input-bg); border: 2px solid var(--input-border); border-radius: 16px; display:flex; flex-direction:column;
-    justify-content:center; align-items:flex-start; text-align:left; padding: 1rem; color:#fff;
-  }
-  .star-point-large.north-large { top: 20px; left: 50%; transform: translateX(-50%); width: 160px; height: 80px; }
-  .star-point-large.south-large { bottom: 20px; left: 50%; transform: translateX(-50%); width: 160px; height: 80px; }
-  .star-point-large.east-large { right: 20px; top: 50%; transform: translateY(-50%); width: 110px; height: 110px; }
-  .star-point-large.west-large { left: 20px; top: 50%; transform: translateY(-50%); width: 110px; height: 110px; }
-  .direction-heading-large { font-weight: bold; font-size: .8rem; margin-bottom: .5rem; color: #888; text-align: center; width: 100%; display:block; }
-  .star-item-large { margin-bottom: .3rem; font-size: .75rem; line-height: 1.2; }
-
   /* Experiment modal (full-screen) */
   .experiment-modal {
     position: fixed; inset: 0; background: var(--background); z-index: 1001;
@@ -818,10 +771,10 @@
   .experiment-modal-header h2 { margin: 0; color: var(--heading); font-size: 1.3rem; }
 
   .experiment-modal-content {
-    flex: 1 1 auto;          /* grow + shrink in flex column */
-    min-width: 0;            /* allow wrapping instead of shrink-to-fit */
-    min-height: 0;           /* create a proper scrollport */
-    overflow: auto;          /* scroll when needed */
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
     padding: 1rem;
     width: 100%;
     max-width: 100%;
