@@ -399,10 +399,12 @@
       on:keydown={mapTileClickable() ? (e) => tileKeyActivate(e, handleLfgMap) : undefined}
       data-tile="map"
     >
-      {#if isValidEmail(email) && !mapData}
-        <button class="lfg-button" on:click|stopPropagation={handleLfgMap} aria-label="Create your relationship map">LFG</button>
-      {/if}    
-      <div class="tile-header"><h3>🗺️ Relationship Map</h3></div>
+      <div class="tile-header">
+        <h3>🗺️ Relationship Map</h3>
+        {#if isValidEmail(email) && !mapData}
+          <button class="lfg-button" on:click|stopPropagation={handleLfgMap} aria-label="Create your relationship map">LFG</button>
+        {/if}    
+      </div>
       <div class="tile-content">
         <p class="tile-description">Map your important people</p>
         <div class="tile-preview">
@@ -477,12 +479,14 @@
       on:keydown={northStarTileClickable() ? (e) => tileKeyActivate(e, handleLfgNorthStar) : undefined}
       data-tile="northstar"
     >
-      {#if isValidEmail(email) && !mapData}
-        <div class="lock-icon" aria-hidden="true">🔒</div>
-      {:else if isValidEmail(email) && !northStarData}
-        <button class="lfg-button" on:click|stopPropagation={handleLfgNorthStar} aria-label="Create your north star">LFG</button>
-      {/if}    
-      <div class="tile-header"><h3>⭐ North Star</h3></div>
+      <div class="tile-header">
+        <h3>⭐ North Star</h3>
+        {#if isValidEmail(email) && !mapData}
+          <div class="lock-icon" aria-hidden="true">🔒</div>
+        {:else if isValidEmail(email) && !northStarData}
+          <button class="lfg-button" on:click|stopPropagation={handleLfgNorthStar} aria-label="Create your north star">LFG</button>
+        {/if}    
+      </div>
       <div class="tile-content">
         <p class="tile-description">Set your direction</p>
         <div class="tile-preview">
@@ -548,14 +552,16 @@
       on:keydown={experimentsTileClickable() ? (e) => tileKeyActivate(e, handleLfgExperiments) : undefined}
       data-tile="experiments"
     >
-      {#if isValidEmail(email) && (!mapData || !northStarData)}
-        <div class="lock-icon" aria-hidden="true">🔒</div>
-      {:else if isValidEmail(email)}
-        <button class="lfg-button" on:click|stopPropagation={handleLfgExperiments} aria-label="Create a new experiment">
-          {experimentsData && experimentsData.length > 0 ? 'Create New' : 'LFG'}
-        </button>
-      {/if}    
-      <div class="tile-header"><h3>🧪 Experiments</h3></div>
+      <div class="tile-header">
+        <h3>🧪 Experiments</h3>
+        {#if isValidEmail(email) && (!mapData || !northStarData)}
+          <div class="lock-icon" aria-hidden="true">🔒</div>
+        {:else if isValidEmail(email)}
+          <button class="lfg-button" on:click|stopPropagation={handleLfgExperiments} aria-label="Create a new experiment">
+            {experimentsData && experimentsData.length > 0 ? 'Create New' : 'LFG'}
+          </button>
+        {/if}    
+      </div>
       <div class="tile-content">
         <p class="tile-description">Small steps, radical intent, real progress</p>
         <div class="tile-preview">
@@ -681,10 +687,6 @@
           {/if}
 
           {#if experimentError}<p class="error">{experimentError}</p>{/if}
-
-          <p style="font-style: italic; margin-top: 1rem;">
-            TEND helps you nurture connection by visualizing your important connections, setting direction for your relationships with a north star, and helping you design & run experiments to learn and grow
-          </p>
         </div>
 
         {#if experimentResult}
@@ -769,8 +771,10 @@
 
   .lock-icon { font-size: 1.5em; color: #888; }
 
-  .tile-header { display: flex; justify-content: center; align-items: center; margin-bottom: 1rem; }
-  .tile-header h3 { margin: 0; color: var(--heading); text-align: center; }
+  .tile-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
+  .tile-header h3 { grid-column: 2; justify-self: center;margin: 0; color: var(--heading); text-align: center; }
+  .tile-header .header-spacer { grid-column: 1; width: 0; }
+  .tile-header .lfg-button, .tile-header .lock-icon  { grid-column: 3; position: static; max-width: 50%; min-width: 80px; justify-self: center; }
   .tile-description { color: var(--text); margin-bottom: 1rem; font-size: .9rem; font-style: italic; text-align: center; }
 
   .tile-preview {
@@ -1028,12 +1032,34 @@
 
   .error { color: #ff6b6b; font-size: .9rem; margin-top: .5rem; }
 
-  /* Experiments table (narrow view only) */
+  /* Experiments table */
   .experiments-grid-container { width: 100%; }
   .narrow-view { display: block; }
   .experiments-scroll-container { overflow-x: auto; overflow-y: visible; width: 100%; border: 1px solid var(--input-border); border-radius: 6px; }
   .experiments-table { width: 100%; border-collapse: collapse; min-width: fit-content; }
   .narrow-view .experiments-table { min-width: calc(200px + 250px * var(--experiment-count, 3)); }
+  .experiments-table th.experiment-header,
+  .experiments-table td.experiment-cell {
+    max-width: 75%;           
+    width: clamp(120px, 22vw, 65%);
+    overflow-wrap: anywhere;
+  }
+  .experiments-scroll-container {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .experiments-table .step-label {
+    width: auto;
+    min-width: fit-content;
+    white-space: nowrap;
+    padding: .5rem .75rem;
+  }
+  /* If your browser support is good, you can use fit-content directly */
+  .experiments-table {
+    table-layout: auto;
+  }
+
+
 
   .step-header, .experiment-header, .experiment-number-header, .status-header {
     background: var(--input-bg); border-bottom: 2px solid var(--input-border); padding: .5rem; text-align: left; font-weight: 600; color: var(--heading); font-size: .8rem;
