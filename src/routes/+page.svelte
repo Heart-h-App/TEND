@@ -63,6 +63,22 @@
       goto(`/designExperiment?email=${encodeURIComponent(email)}`); // subsequent: route
     }
   }
+  function mapTileClickable() {
+    return isValidEmail(email) && !mapData;
+  }
+  function northStarTileClickable() {
+    return isValidEmail(email) && mapData && !northStarData;
+  }
+  function experimentsTileClickable() {
+    return isValidEmail(email) && mapData && northStarData && (!experimentsData || experimentsData.length === 0);
+  }
+
+  function tileKeyActivate(e: KeyboardEvent, handler: () => void) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handler();
+    }
+  }
 
   async function checkForExistingMap() {
     if (!email.trim()) { mapData = null; return; }
@@ -307,7 +323,17 @@
 
   <div class="dashboard-grid">
     <!-- Relationship Map Tile -->
-    <div class="dashboard-tile" class:masked={isValidEmail(email) && !mapData} data-tile="map">
+    <div 
+      class="dashboard-tile" 
+      class:masked={isValidEmail(email) && !mapData} 
+      class:clickable={mapTileClickable()}
+      role={mapTileClickable() ? 'button' : undefined}
+      tabindex={mapTileClickable() ? 0 : undefined}
+      aria-label={mapTileClickable() ? 'Create your relationship map' : undefined}
+      on:click={mapTileClickable() ? handleLfgMap : undefined}
+      on:keydown={mapTileClickable() ? (e) => tileKeyActivate(e, handleLfgMap) : undefined}
+      data-tile="map"
+    >
       {#if isValidEmail(email) && !mapData}
         <button class="lfg-button" on:click|stopPropagation={handleLfgMap} aria-label="Create your relationship map">LFG</button>
       {/if}    
@@ -341,7 +367,18 @@
     </div>
 
     <!-- North Star Tile -->
-    <div class="dashboard-tile" class:masked={isValidEmail(email) && !northStarData} class:locked={isValidEmail(email) && !mapData} data-tile="northstar">
+    <div 
+      class="dashboard-tile" 
+      class:locked={isValidEmail(email) && !mapData} 
+      class:masked={isValidEmail(email) && !northStarData}
+      class:clickable={northStarTileClickable()}
+      role={northStarTileClickable() ? 'button' : undefined}
+      tabindex={northStarTileClickable() ? 0 : undefined}
+      aria-label={northStarTileClickable() ? 'Create your north star' : undefined}
+      on:click={northStarTileClickable() ? handleLfgNorthStar : undefined}
+      on:keydown={northStarTileClickable() ? (e) => tileKeyActivate(e, handleLfgNorthStar) : undefined}
+      data-tile="northstar"
+    >
       {#if isValidEmail(email) && !mapData}
         <div class="lock-icon" aria-hidden="true">🔒</div>
       {:else if isValidEmail(email) && !northStarData}
@@ -401,7 +438,18 @@
     </div>
 
     <!-- Experiments Tile -->
-    <div class="dashboard-tile experiments-tile" class:masked={isValidEmail(email) && !experimentsData} class:locked={isValidEmail(email) && (!mapData || !northStarData)} data-tile="experiments">
+    <div 
+      class="dashboard-tile experiments-tile" 
+      class:masked={isValidEmail(email) && !experimentsData} 
+      class:locked={isValidEmail(email) && (!mapData || !northStarData)} 
+      class:clickable={experimentsTileClickable()}
+      role={experimentsTileClickable() ? 'button' : undefined}
+      tabindex={experimentsTileClickable() ? 0 : undefined}
+      aria-label={experimentsTileClickable() ? 'Create your first experiment' : undefined}
+      on:click={experimentsTileClickable() ? handleLfgExperiments : undefined}
+      on:keydown={experimentsTileClickable() ? (e) => tileKeyActivate(e, handleLfgExperiments) : undefined}
+      data-tile="experiments"
+    >
       {#if isValidEmail(email) && (!mapData || !northStarData)}
         <div class="lock-icon" aria-hidden="true">🔒</div>
       {:else if isValidEmail(email)}
@@ -510,7 +558,7 @@
       <div class="experiment-modal-content" bind:this={experimentModalContent}>
         <div class="experiment-form">
           <p style="font-style: italic; margin-top: 1rem;">
-            Experiments are the heart of how TEND helps you make progress. Small shifts in how you address important challenges in the moment help you gather powerful learnings.
+            Experiments are the heart of how TEND helps you make progress. Small shifts right in the moment you're facing important challenges can lead to signficant improvements in how you relate to yourself and others.
           </p>
           {#if !experimentResult}
             <div class="input-group">
@@ -608,6 +656,8 @@
   }
   .dashboard-tile.locked { opacity: .6; cursor: not-allowed; }
   .dashboard-tile.locked:hover { transform: none; box-shadow: 0 2px 8px rgba(0,0,0,.2); border: 2px solid var(--input-border); }
+  .dashboard-tile.clickable { cursor: pointer; }
+  .dashboard-tile.clickable:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.3); border: 3px solid white; }
 
   .lfg-button, .lock-icon {
     position: absolute; top: 12px; left: 12px; z-index: 2;
