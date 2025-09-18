@@ -714,7 +714,7 @@
             </div>
 
             <h2>Want experiments more tailored to you?</h2>
-            <p style="font-style: italic; margin-top: 1rem;">
+            <p style="font-style: italic; margin-top: 1rem; text-align: center;">
               Create a map and north star and TEND will use those to hone experiments to your context and goals!
             </p>
 

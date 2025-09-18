@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
     
   type Experiment = {
       challenge: string;
@@ -76,6 +77,14 @@
         loading = false;
       }
     }
+  
+    function returnToDashboard() {
+      if (ownerEmail) {
+        goto(`/?email=${encodeURIComponent(ownerEmail)}`);
+      } else {
+        goto('/');
+      }
+    }  
 </script>
   
   
@@ -158,7 +167,12 @@
               <p style="margin-bottom: 1rem;">{result.learnings}</p>
             </div>
           {/if}
-          
+          <!-- Return button -->
+          <div style="text-align:center; margin-top:1.5rem;">
+            <button class="lfg-button" on:click={returnToDashboard}>
+              Return to Dashboard
+            </button>
+          </div>
         </div>
       {/if}
     </div>
@@ -181,5 +195,20 @@
       width: 100%;
       transition: border-color 0.2s ease;
     }
+    .lfg-button {
+       font-family: 'Mulish', sans-serif;
+       font-weight: 600;
+       font-size: 1em;
+       padding: 8px 16px;
+       border: none;
+       border-radius: 4px;
+       background-color: var(--button-bg);
+       color: #fff;
+       cursor: pointer;
+       transition: background-color 0.2s ease;
+     }
+     .lfg-button:hover {
+       background-color: var(--button-hover);
+     }
   </style>
   
