@@ -20,6 +20,8 @@
   let loadingExperiments = false;
   let emailError = '';
   let emailInput: HTMLInputElement;
+  let pendingOpenDrawer = false;
+  let pendingSelectId: string | null = null;
 
   // modal flags
   let showExperimentModal = false;
@@ -99,6 +101,19 @@
     }
   }
 
+  $: if (mapData && pendingOpenDrawer) {
+    // default to the connection node if not specified
+    openMapDrawerFor(pendingSelectId || 'connection');
+    pendingOpenDrawer = false;
+    pendingSelectId = null;
+
+    // Clean the URL so refresh doesn’t re-open
+    const url = new URL(window.location.href);
+    url.searchParams.delete('openModal');
+    url.searchParams.delete('selectNode');
+    history.replaceState(null, '', url.toString());
+  }
+
   async function checkForExistingNorthStar() {
     if (!email.trim()) { northStarData = null; return; }
     loadingNorthStar = true;
@@ -171,6 +186,33 @@
     emailInput?.focus();
   }
 
+  // --- drawer state for the Map tile ---
+  type Node = {
+    id: string;
+    label: string;
+    desc?: string;
+    name?: string;
+    description?: string;
+    status?: "on track" | "strained";
+    details?: Record<string, string>;
+    x: number; y: number; width?: number; height?: number;
+  };
+
+  let showMapDrawer = false;
+  let selectedNode: Node | null = null;
+
+  function handleNodeSelect(node: Node) {
+    // ignore the "You" node (open only for the connection)
+    if (node?.id === 'you') return;
+    selectedNode = node;
+    showMapDrawer = true;
+  }
+
+  function closeMapDrawer() {
+    showMapDrawer = false;
+    selectedNode = null;
+  }
+
   onMount(() => {
     window.addEventListener('keydown', handleEscapeKey);
     window.addEventListener('keydown', nudgeForEmail, { capture: true });
@@ -179,6 +221,10 @@
     const sp = new URLSearchParams(window.location.search);
     const emailFromUrl = sp.get('email');
     if (emailFromUrl && isValidEmail(emailFromUrl)) email = emailFromUrl;
+    const openModal = sp.get('openModal');
+    const selectNode = sp.get('selectNode');
+    pendingOpenDrawer = openModal === 'true' || openModal === '1';
+    pendingSelectId = selectNode;
 
     return () => {
       window.removeEventListener('keydown', nudgeForEmail, { capture: true } as any);
@@ -197,6 +243,25 @@
         saveUserEmail();
       }
     }, 800);
+  }
+
+  function openMapDrawerFor(id: string) {
+    if (!mapData) return;
+
+    // Your diagram uses ids: 'you' and 'connection'
+    if (id === 'connection') {
+      selectedNode = {
+        id: 'connection',
+        label: mapData.name,
+        name: mapData.name,
+        desc: mapData.description,
+        description: mapData.description,
+        status: mapData.status,
+        details: mapData.details,
+        x: 0, y: 0 // not used by the drawer
+      };
+      showMapDrawer = true;
+    }
   }
 
   $: if (email) {
@@ -345,13 +410,46 @@
             <div class="loading-state">Loading...</div>
           {:else if mapData}
             <div class="diagram-container">
-              <Diagram 
+              <Diagram
                 nodes={[
                   { id: 'you', label: 'You', name: 'You', description: '', status: undefined, details: {}, x: 50, y: 50, width: 300, height: 225 },
                   { id: 'connection', label: mapData.name, desc: mapData.description, name: mapData.name, description: mapData.description, status: mapData.status, details: mapData.details, x: 450, y: 50, width: 300, height: 225 }
                 ]}
                 edges={[{ id: 'main-connection', source: 'you', target: 'connection', status: mapData.status }]}
+                on:nodeSelect={(e) => handleNodeSelect(e.detail)}
               />
+              {#if showMapDrawer && selectedNode}
+                <div class="map-drawer-backdrop" on:click={closeMapDrawer} />
+                <aside
+                  class="map-drawer"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Connection details"
+                  tabindex="-1"
+                  on:keydown={(e) => e.key === 'Escape' && closeMapDrawer()}
+                >
+                  <header class="map-drawer-header">
+                    <h4>{selectedNode.name ?? selectedNode.label}</h4>
+                    <button class="close-btn" on:click={closeMapDrawer} aria-label="Close">×</button>
+                  </header>
+                  <div class="map-drawer-body">
+                    {#if selectedNode.status}
+                      <div class="row"><strong>Status:</strong> {selectedNode.status}</div>
+                    {/if}
+                    {#if selectedNode.description}
+                      <div class="row"><strong>Vibe:</strong> {selectedNode.description}</div>
+                    {/if}
+                    {#if selectedNode.details}
+                      <div class="row"><strong>Details:</strong></div>
+                      <ul class="details">
+                        {#if selectedNode.details['+']}<li>+ | {selectedNode.details['+']}</li>{/if}
+                        {#if selectedNode.details['∆']}<li>∆ | {selectedNode.details['∆']}</li>{/if}
+                        {#if selectedNode.details['→']}<li>→ | {selectedNode.details['→']}</li>{/if}
+                      </ul>
+                    {/if}
+                  </div>
+                </aside>
+              {/if}
             </div>
           {:else}
             <div class="placeholder-content">
@@ -697,27 +795,63 @@
   .placeholder-connection { flex:none; width: 30px; height: 2px; background: var(--input-border); margin: 0; position: relative; }
   .placeholder-connection::after { content:''; position:absolute; right:-6px; top:-4px; border-left:8px solid var(--input-border); border-top:5px solid transparent; border-bottom:5px solid transparent; }
 
+  /* Map tile must be positioning context */
+  [data-tile="map"] { position: relative; }
+
+  /* dim the diagram when drawer is open */
+  .map-drawer-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,.35);
+    z-index: 3;
+  }
+
+  /* the drawer panel */
+  .map-drawer {
+    position: absolute; top: 0; right: 0;
+    height: 100%;
+    width: min(85%, 320px);
+    background: var(--bg);
+    border-left: 1px solid var(--input-border);
+    box-shadow: -6px 0 16px rgba(0,0,0,.35);
+    z-index: 4;
+    display: flex; flex-direction: column;
+    animation: mapDrawerIn .18s ease-out;
+  }
+
+  @keyframes mapDrawerIn { from { transform: translateX(12%); opacity:.6; } to { transform:none; opacity:1; } }
+
+  .map-drawer-header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:.1rem 0.75rem; border-bottom:1px solid var(--input-border);
+  }
+  .map-drawer-header h4 { margin:0; color:var(--heading); }
+  .map-drawer-body { padding:.75rem 1rem; overflow:auto; }
+  .map-drawer .close-btn { background:transparent; border:none; color:#fff; font-size:1.25rem; cursor:pointer; }
+
+  .details { list-style-type: none;margin:.25rem 0 0; padding-left:1rem; }
+  .details li { list-style-type: none; margin:.25rem 0; }
+
   
   /* North Star */
   
   /* Turn container into a 3x3 grid with center in the middle */
   .placeholder-star {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  grid-template-rows: auto auto auto;
-  grid-template-areas:
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    grid-template-rows: auto auto auto;
+    grid-template-areas:
     ". north ."
     "west center east"
     ". south .";
-  align-items: center;
-  justify-items: center;
-  gap: 0.75rem 1rem;
+    align-items: center;
+    justify-items: center;
+    gap: 0.75rem 1rem;
 
-  width: min(100%, 520px);
-  height: auto;          /* let content define height */
-  margin: 0 auto;
-  padding: 0.5rem 0.75rem;
-  position: relative;    /* no absolute children anymore */
+    width: min(100%, 520px);
+    height: auto;          /* let content define height */
+    margin: 0 auto;
+    padding: 0.5rem 0.75rem;
+    position: relative;    /* no absolute children anymore */
   }
   
   /* Map each box to its grid area */
@@ -734,7 +868,7 @@
     transform: none;
   }
 
-  /* Placeholder look (same visual, grid-based now) */
+  /* Placeholder north star */
   .star-center {
     width: 96px; height: 48px;
     border: 2px dashed var(--input-border);
