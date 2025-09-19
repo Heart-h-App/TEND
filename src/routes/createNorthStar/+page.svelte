@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import Diagram from "$lib/components/diagramNorthStar.svelte";
+  import { auth, user } from '$lib/stores/auth';
 
   type Item = { emoji: string; phrase: string };
   type NorthStar = {
@@ -23,13 +24,23 @@
   let visionLimitReached = false;
   let currentLimitReached = false;
 
-  // Get email from URL parameters
+  // Get email from URL parameters and check authentication
   onMount(() => {
-    const emailParam = $page.url.searchParams.get('email');
-    if (emailParam) {
-      ownerEmail = emailParam;
-      checkForExistingNorthStar();
-    }
+    // Check for existing session
+    auth.checkSession().then(() => {
+      // If authenticated, use session email
+      if ($user && $user.authenticated && $user.email) {
+        ownerEmail = $user.email;
+        checkForExistingNorthStar();
+      } else {
+        // Otherwise try to get email from URL parameter
+        const emailParam = $page.url.searchParams.get('email');
+        if (emailParam) {
+          ownerEmail = emailParam;
+          checkForExistingNorthStar();
+        }
+      }
+    });
   });
 
   async function checkForExistingNorthStar() {
@@ -100,9 +111,9 @@
         } else {
           console.log('Saved North Star id:', saved.id);
           // Navigate back to dashboard with email parameter and modal state
-          goto(`/?email=${encodeURIComponent(ownerEmail)}&openModal=true&selectNode=northstar`);
+          goto(`/?email=${encodeURIComponent(ownerEmail)}&openModal=map&selectNode=northstar`);
         }
-    }
+      }
     } catch (e: any) {
       error = String(e?.message || e || 'Unknown error');
     } finally {

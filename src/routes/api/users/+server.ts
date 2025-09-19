@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
-import { PrismaClient } from '@prisma/client';
+import prisma from '$lib/server/db';
 
-const prisma = new PrismaClient();
+// Using imported prisma client from db.ts
 
 export async function POST({ request }) {
   try {
@@ -17,7 +17,7 @@ export async function POST({ request }) {
         data: { email }
       });
       return json({ id: user.id, email: user.email });
-    } catch (error) {
+    } catch (error: any) {
       // If unique constraint violation (email already exists), return success silently
       if (error.code === 'P2002') {
         return json({ message: 'User already exists' });

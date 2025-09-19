@@ -1,8 +1,11 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount, tick } from 'svelte';
+  import { auth, user } from '$lib/stores/auth';
   import Diagram from "$lib/components/diagramConnection.svelte";
-  
+  import { writable } from 'svelte/store';
+  export const toast = writable<string | null>(null);
+
   type Rel = {
     name: string;
     description: string;
@@ -12,6 +15,13 @@
 
   let experimentModalContent: HTMLDivElement | null = null;
   let email = '';
+  let password = '';
+  let confirmPassword = '';
+  let hasPassword = false;
+  let showPasswordFields = false;
+  let passwordError = '';
+  let checkingPassword = false;
+  let authLoading = false;
   let mapData: any = null;
   let loadingMap = false;
   let northStarData: any = null;
@@ -21,6 +31,7 @@
   let emailError = '';
   let emailInput: HTMLInputElement;
   let pendingOpenDrawer = false;
+  let showEmailInput = true;
   let pendingSelectId: string | null = null;
 
   // modal flags
@@ -40,14 +51,86 @@
   // debounce
   let debounceTimer: NodeJS.Timeout | null = null;
 
+  function showToast(message: string) {
+    toast.set(message);
+    setTimeout(() => toast.set(null), 4000); // auto-hide after 4 s
+  }
   function isValidEmail(email: string): boolean {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email.trim());
   }
 
-  function handleLfgMap() {
+  function isValidPassword(password: string): boolean {
+    return password.length >= 8;
+  }
+
+  function doPasswordsMatch(): boolean {
+    return password === confirmPassword;
+  }
+
+  // Function to check if user has a password
+  async function checkPasswordStatus() {
+    if (!isValidEmail(email) || checkingPassword) return;
+    
+    checkingPassword = true;
+    try {
+      hasPassword = await auth.checkHasPassword(email);
+      showPasswordFields = true;
+    } catch (error) {
+      console.error('Error checking password status:', error);
+    } finally {
+      checkingPassword = false;
+    }
+  }
+
+  async function handleAuth() {
     if (!isValidEmail(email)) { emailError = 'Please enter a valid email'; emailInput?.focus(); return; }
-    goto(`/mapConnection?email=${encodeURIComponent(email)}`);
+    
+    // Check if user needs to create a password
+    if (!showPasswordFields) {
+      await checkPasswordStatus();
+      return;
+    }
+    
+    // Handle authentication
+    if (hasPassword) {
+      // Login
+      if (!password) {
+        passwordError = 'Please enter your password';
+        return;
+      }
+      
+      authLoading = true;
+      const result = await auth.login(email, password);
+      authLoading = false;
+      
+      if (!result.success) {
+        passwordError = result.error || 'Login failed';
+        return;
+      }
+    } else {
+      // Register
+      if (!isValidPassword(password)) {
+        passwordError = 'Password must be at least 8 characters';
+        return;
+      }
+      
+      if (!doPasswordsMatch()) {
+        passwordError = 'Passwords do not match';
+        return;
+      }
+      
+      authLoading = true;
+      const result = await auth.register(email, password, confirmPassword);
+      authLoading = false;
+      
+      if (!result.success) {
+        passwordError = result.error || 'Registration failed';
+        return;
+      }
+    }
+    
+    window.location.replace(`/?email=${encodeURIComponent(email)}`);
   }
 
   function handleLfgNorthStar() {
@@ -56,13 +139,16 @@
     goto(`/createNorthStar?email=${encodeURIComponent(email)}`);
   }
 
+
   function handleLfgExperiments() {
     if (!isValidEmail(email)) { emailError = 'Please enter a valid email'; emailInput?.focus(); return; }
-    if (!mapData || !northStarData) return; // progressive unlock: needs map + north star first
-    if (!experimentsData || experimentsData.length === 0) {
-      showExperimentModal = true; // first-time: open the modal
+    
+    // If user has both map and north star, go to the designExperiment page
+    if (mapData && northStarData) {
+      goto(`/designExperiment?email=${encodeURIComponent(email)}`);
     } else {
-      goto(`/designExperiment?email=${encodeURIComponent(email)}`); // subsequent: route
+      // Otherwise show the experiment modal
+      showExperimentModal = true;
     }
   }
   function mapTileClickable() {
@@ -72,7 +158,7 @@
     return isValidEmail(email) && mapData && !northStarData;
   }
   function experimentsTileClickable() {
-    return isValidEmail(email) && mapData && northStarData && (!experimentsData || experimentsData.length === 0);
+    return isValidEmail(email); // Always unlocked
   }
 
   function tileKeyActivate(e: KeyboardEvent, handler: () => void) {
@@ -102,16 +188,19 @@
   }
 
   $: if (mapData && pendingOpenDrawer) {
-    // default to the connection node if not specified
-    openMapDrawerFor(pendingSelectId || 'connection');
-    pendingOpenDrawer = false;
-    pendingSelectId = null;
+    console.log('Opening map drawer for:', pendingSelectId);
+    // Wait a moment to ensure the UI is ready
+    setTimeout(() => {
+      openMapDrawerFor(pendingSelectId || 'connection');
+      pendingOpenDrawer = false;
+      pendingSelectId = null;
 
-    // Clean the URL so refresh doesn’t re-open
-    const url = new URL(window.location.href);
-    url.searchParams.delete('openModal');
-    url.searchParams.delete('selectNode');
-    history.replaceState(null, '', url.toString());
+      // Clean the URL so refresh doesn't re-open
+      const url = new URL(window.location.href);
+      url.searchParams.delete('openModal');
+      url.searchParams.delete('selectNode');
+      history.replaceState(null, '', url.toString());
+    }, 100);
   }
 
   async function checkForExistingNorthStar() {
@@ -144,7 +233,6 @@
           experimentsData = data;
         } else {
           experimentsData = null;
-          if (isValidEmail(email) && !showExperimentModal) showExperimentModal = true;
         }
       } else {
         experimentsData = null;
@@ -214,22 +302,49 @@
   }
 
   onMount(() => {
-    window.addEventListener('keydown', handleEscapeKey);
-    window.addEventListener('keydown', nudgeForEmail, { capture: true });
-    window.addEventListener('pointerdown', nudgeForEmail, { capture: true });
+    // Check for existing flash message(s)
+    const flashMsg = localStorage.getItem('flash');
+    if (flashMsg) {
+      showToast(flashMsg);
+      localStorage.removeItem('flash');
+    }
+    //  Check for existing session
+    auth.checkSession().then(() => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const emailParam = urlParams.get('email');
+      
+      // If authenticated, use session email and load data
+      if ($user && $user.authenticated && $user.email) {
+        email = $user.email;
+        showEmailInput = false; // Hide email input for authenticated users
+        checkForExistingMap();
+        checkForExistingNorthStar();
+        checkForExistingExperiments();
+        
+        // Check URL params for modal opening
+        const openModal = urlParams.get('openModal');
+        const selectNode = urlParams.get('selectNode');
+        
+        // Set pending flags to open the appropriate modal/drawer when data is loaded
+        if (openModal === 'map' || openModal === 'true') {
+          pendingOpenDrawer = true;
+          pendingSelectId = selectNode || 'connection';
+        }
+      } 
+      // If not authenticated but URL has email, just pre-fill the field
+      else if (emailParam) {
+        email = emailParam;
+        // Check if this email has a password
+        if (isValidEmail(email)) {
+          checkPasswordStatus();
+        }
+      }
+    });
 
-    const sp = new URLSearchParams(window.location.search);
-    const emailFromUrl = sp.get('email');
-    if (emailFromUrl && isValidEmail(emailFromUrl)) email = emailFromUrl;
-    const openModal = sp.get('openModal');
-    const selectNode = sp.get('selectNode');
-    pendingOpenDrawer = openModal === 'true' || openModal === '1';
-    pendingSelectId = selectNode;
-
+    // Set up escape key handler
+    document.addEventListener('keydown', handleEscapeKey);
     return () => {
-      window.removeEventListener('keydown', nudgeForEmail, { capture: true } as any);
-      window.removeEventListener('pointerdown', nudgeForEmail, { capture: true } as any);
-      window.removeEventListener('keydown', handleEscapeKey);
+      document.removeEventListener('keydown', handleEscapeKey);
     };
   });
 
@@ -237,9 +352,15 @@
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       if (email && isValidEmail(email)) {
-        checkForExistingMap();
-        checkForExistingNorthStar();
-        checkForExistingExperiments();
+        // Only make API calls if authenticated
+        if ($user && $user.authenticated) {
+          checkForExistingMap();
+          checkForExistingNorthStar();
+          checkForExistingExperiments();
+        } else {
+          // Check if user has password when email is valid
+          checkPasswordStatus();
+        }
         saveUserEmail();
       }
     }, 800);
@@ -310,8 +431,8 @@
         northStarData = null;
         experimentsData = null;
         showDeleteConfirmation = false;
-        alert('Account deleted successfully.');
-      } else {
+        localStorage.setItem('flash', 'Account deleted');
+        window.location.replace('/');      } else {
         try {
           const errorData = await response.json();
           alert(`Failed to delete account: ${errorData.error || 'Please try again.'}`);
@@ -374,16 +495,92 @@
   <div class="dashboard-header">
     <h2>TEND<br /><span style="font-size: 0.8em; font-style: italic; color: var(--text);">nurture your connections</span></h2>
 
-    <label for="owner-email">Email:</label>
-    <input
-      type="email"
-      bind:value={email}
-      bind:this={emailInput}
-      on:input={() => { emailError = ''; }}
-      placeholder="Enter your email"
-      class:error={emailError}
-    />
-    {#if emailError}<div class="error-message">{emailError}</div>{/if}
+    {#if showEmailInput}
+      <label for="owner-email">Email:</label>
+      <input
+        type="email"
+        bind:value={email}
+        bind:this={emailInput}
+        on:input={() => { 
+          emailError = ''; 
+          showPasswordFields = false;
+          hasPassword = false;
+          password = '';
+          confirmPassword = '';
+        }}
+        placeholder="Enter your email"
+        class:error={emailError}
+        disabled={authLoading}
+      />
+      {#if emailError}<div class="error-message">{emailError}</div>{/if}
+    {/if}
+    
+    {#if showPasswordFields}
+      {#if hasPassword}
+        <!-- Login form -->
+       <br>
+       <label for="password">Password:</label>
+        <input
+          type="password"
+          id="password"
+          bind:value={password}
+          on:input={() => { passwordError = ''; }}
+          placeholder="Enter your password"
+          class:error={passwordError}
+          disabled={authLoading}
+        />
+        {#if passwordError}<div class="error-message">{passwordError}</div>{/if}
+        <button 
+          class="auth-button" 
+          on:click={handleAuth} 
+          disabled={authLoading || !isValidEmail(email) || !password}
+        >
+          {authLoading ? 'Logging in...' : 'Login'}
+        </button>
+      {:else}
+        <!-- Registration form -->
+        <br>
+        <label for="password">Create Password:</label>
+        <input
+          type="password"
+          id="password"
+          bind:value={password}
+          on:input={() => { passwordError = ''; }}
+          placeholder="Create a password (min 8 characters)"
+          class:error={passwordError}
+          disabled={authLoading}
+        />
+        <br>
+        <label for="confirm-password">Confirm Password:</label>
+        <input
+          type="password"
+          id="confirm-password"
+          bind:value={confirmPassword}
+          on:input={() => { passwordError = ''; }}
+          placeholder="Confirm your password"
+          class:error={passwordError}
+          disabled={authLoading}
+        />
+        {#if passwordError}<div class="error-message">{passwordError}</div>{/if}
+        <button 
+          class="auth-button" 
+          on:click={handleAuth} 
+          disabled={authLoading || !isValidEmail(email) || !password || !confirmPassword}
+        >
+          {authLoading ? 'Creating Account...' : 'Create Account'}
+        </button>
+      {/if}
+    {:else if isValidEmail(email) && showEmailInput}
+      <div class="lfg-button-container">
+        <button 
+          class="lfg-button" 
+          on:click={handleAuth}
+          disabled={authLoading || !isValidEmail(email)}
+        >
+          LFG
+        </button>
+      </div>
+    {/if}
   </div>
 
   <div class="dashboard-grid">
@@ -395,14 +592,14 @@
       role={mapTileClickable() ? 'button' : undefined}
       tabindex={mapTileClickable() ? 0 : undefined}
       aria-label={mapTileClickable() ? 'Create your relationship map' : undefined}
-      on:click={mapTileClickable() ? handleLfgMap : undefined}
-      on:keydown={mapTileClickable() ? (e) => tileKeyActivate(e, handleLfgMap) : undefined}
+      on:click={mapTileClickable() ? () => goto('/mapConnection') : undefined}
+      on:keydown={mapTileClickable() ? (e) => tileKeyActivate(e, () => goto('/mapConnection')) : undefined}
       data-tile="map"
     >
       <div class="tile-header">
         <h3>🗺️ Relationship Map</h3>
         {#if isValidEmail(email) && !mapData}
-          <button class="lfg-button" on:click|stopPropagation={handleLfgMap} aria-label="Create your relationship map">LFG</button>
+          <button class="lfg-button" on:click|stopPropagation={() => goto('/mapConnection')} aria-label="Create your relationship map">LFG</button>
         {/if}    
       </div>
       <div class="tile-content">
@@ -543,7 +740,6 @@
     <div 
       class="dashboard-tile experiments-tile" 
       class:masked={isValidEmail(email) && !experimentsData} 
-      class:locked={isValidEmail(email) && (!mapData || !northStarData)} 
       class:clickable={experimentsTileClickable()}
       role={experimentsTileClickable() ? 'button' : undefined}
       tabindex={experimentsTileClickable() ? 0 : undefined}
@@ -554,9 +750,7 @@
     >
       <div class="tile-header">
         <h3>🧪 Experiments</h3>
-        {#if isValidEmail(email) && (!mapData || !northStarData)}
-          <div class="lock-icon" aria-hidden="true">🔒</div>
-        {:else if isValidEmail(email)}
+        {#if isValidEmail(email)}
           <button class="lfg-button" on:click|stopPropagation={handleLfgExperiments} aria-label="Create a new experiment">
             {experimentsData && experimentsData.length > 0 ? 'Create New' : 'LFG'}
           </button>
@@ -633,6 +827,10 @@
     <div class="delete-account-section">
       <button class="delete-account-btn" on:click={handleDeleteAccount}>Delete Account</button>
     </div>
+  {/if}
+
+  {#if $toast}
+    <div class="toast">{$toast}</div>
   {/if}
 </main>
 
@@ -733,10 +931,36 @@
   *, *::before, *::after { box-sizing: border-box; } /* prevents hover-border growth from changing size */
 
   .container { padding: 0 1rem; }
+  
+  /* Auth styles */
+  .auth-button {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--button-bg);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 0.5rem;
+    transition: background-color 0.2s ease;
+  }
+  
+  .auth-button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+  }
   .dashboard-header { margin-bottom: 2rem; }
   .dashboard-header input { margin-top: 0.5rem; max-width: 300px; }
   .dashboard-header input.error { border-color: #ff4444; box-shadow: 0 0 0 2px rgba(255,68,68,.2); }
-  .error-message { color: #ff4444; font-size: .875rem; margin-top: .25rem; }
+  .error-message {
+    color: var(--error);
+    font-size: 0.8em;
+    margin-top: 0.2em;
+  }
+  
+  /* CSS for logged-in state is handled by the header component */
 
   .dashboard-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; margin-bottom: 2rem; }
 
@@ -1077,4 +1301,19 @@
     vertical-align: top; font-size: .8rem; line-height: 1.3; color: var(--text); max-width: 200px; overflow-wrap: anywhere;
   }
   .narrow-view .experiment-cell { min-width: 150px; max-width: 180px; }
+
+  .toast {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  color: #fff;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  z-index: 2000;
+  animation: fadein 0.3s ease;
+  }
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
 </style>

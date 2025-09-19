@@ -2,6 +2,7 @@
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { auth, user } from '$lib/stores/auth';
     
   type Experiment = {
       challenge: string;
@@ -20,12 +21,21 @@
     let ownerEmail = '';
     let textLimitReached = false;
 
-    // Get email from URL parameters
+    // Get email from URL parameters and check authentication
     onMount(() => {
-      const emailParam = $page.url.searchParams.get('email');
-      if (emailParam) {
-        ownerEmail = emailParam;
-      }
+      // Check for existing session
+      auth.checkSession().then(() => {
+        // If authenticated, use session email
+        if ($user && $user.authenticated && $user.email) {
+          ownerEmail = $user.email;
+        } else {
+          // Otherwise try to get email from URL parameter
+          const emailParam = $page.url.searchParams.get('email');
+          if (emailParam) {
+            ownerEmail = emailParam;
+          }
+        }
+      });
     });
   
   
@@ -84,7 +94,12 @@
       } else {
         goto('/');
       }
-    }  
+    }
+    
+    function createNewExperiment() {
+      // Hard reload the page to reset the form
+      window.location.reload();
+    }
 </script>
   
   
@@ -167,10 +182,13 @@
               <p style="margin-bottom: 1rem;">{result.learnings}</p>
             </div>
           {/if}
-          <!-- Return button -->
-          <div style="text-align:center; margin-top:1.5rem;">
+          <!-- Action buttons -->
+          <div style="text-align:center; margin-top:1.5rem; display: flex; justify-content: center; gap: 1rem;">
             <button class="lfg-button" on:click={returnToDashboard}>
               Return to Dashboard
+            </button>
+            <button class="lfg-button create-new-btn" on:click={createNewExperiment}>
+              Create New Experiment
             </button>
           </div>
         </div>
@@ -209,6 +227,14 @@
      }
      .lfg-button:hover {
        background-color: var(--button-hover);
+     }
+     
+     .create-new-btn {
+       background-color: #2c7be5;
+     }
+     
+     .create-new-btn:hover {
+       background-color: #1a68d1;
      }
   </style>
   

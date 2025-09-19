@@ -4,6 +4,7 @@
   import { onMount } from 'svelte';
   import Diagram from "$lib/components/diagramConnection.svelte";
   import type { Node as DNode, Edge as DEdge } from "$lib/components/diagramConnection.svelte";
+  import { auth, user } from '$lib/stores/auth';
 
   type Rel = {
     name: string;
@@ -20,13 +21,23 @@
   let checkingExistingRelationship = false;
   let textLimitReached = false;
 
-  // Get email from URL parameters
+  // Get email from URL parameters and check authentication
   onMount(() => {
-    const emailParam = $page.url.searchParams.get('email');
-    if (emailParam) {
-      ownerEmail = emailParam;
-      checkForExistingRelationship();
-    }
+    // Check for existing session
+    auth.checkSession().then(() => {
+      // If authenticated, use session email
+      if ($user && $user.authenticated && $user.email) {
+        ownerEmail = $user.email;
+        checkForExistingRelationship();
+      } else {
+        // Otherwise try to get email from URL parameter
+        const emailParam = $page.url.searchParams.get('email');
+        if (emailParam) {
+          ownerEmail = emailParam;
+          checkForExistingRelationship();
+        }
+      }
+    });
   });
 
   async function checkForExistingRelationship() {
@@ -97,9 +108,9 @@
         } else {
           console.log('Saved relationship id:', saved.id);
           // Navigate back to dashboard with email parameter and modal state
-          goto(`/?email=${encodeURIComponent(ownerEmail)}&openModal=true&selectNode=connection`);
+          goto(`/?email=${encodeURIComponent(ownerEmail)}&openModal=map&selectNode=connection`);
         }
-    }
+      }
     } catch (e: any) {
       error = String(e?.message || e || 'Unknown error');
     } finally {

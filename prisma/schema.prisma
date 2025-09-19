@@ -37,20 +37,33 @@ model NorthStar {
 }
 
 model Experiment {
-  id          String   @id @default(cuid())
-  ownerEmail  String
-  challenge   String
-  hypothesis  String
+  id           String   @id @default(cuid())
+  ownerEmail   String
+  challenge    String
+  hypothesis   String
   intervention String
-  measure     String
-  learnings   String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  measure      String
+  learnings    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model User {
+  id                 String   @id @default(cuid())
+  email              String   @unique
+  passwordHash       String?
+  passwordCreatedAt  DateTime?
+  passwordUpdatedAt  DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  sessions           Session[]
+}
+
+model Session {
   id        String   @id @default(cuid())
-  email     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  expiresAt DateTime
 }

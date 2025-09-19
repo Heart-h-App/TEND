@@ -4,6 +4,8 @@
 	import Header from '$lib/components/Header.svelte';
 	import Footer from '$lib/components/getMoar.svelte';
 	import { page } from '$app/stores';
+	import { auth, isAuthenticated } from '$lib/stores/auth';
+	import { onMount } from 'svelte';
 
 	let { children } = $props();
 	
