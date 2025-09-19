@@ -6,7 +6,7 @@ RUN npm ci
 
 COPY . .
 RUN npx prisma generate
-RUN npx prisma migrate deploy
+# Remove migration from build time
 RUN npm run build
 RUN npm prune --production
 
@@ -21,6 +21,11 @@ COPY prisma prisma/
 # Generate Prisma client
 RUN npx prisma generate
 
+# Copy startup script
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 EXPOSE 3000
 ENV NODE_ENV=production
-CMD ["node", "build"]
+# Use the startup script instead of directly running the app
+CMD ["/app/start.sh"]
