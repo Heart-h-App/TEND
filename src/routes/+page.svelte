@@ -1154,6 +1154,7 @@
 .star-point.real-northstar-text.west {
   width: min(100%, clamp(120px, 28vw, 200px));
   min-height: 9em;
+  align-self: stretch;
 }
 
 /* Point headings */
