@@ -31,9 +31,13 @@
   let loadingExperiments = false;
   let emailError = '';
   let emailInput: HTMLInputElement;
+  let passwordInput: HTMLInputElement | null = null;
+  let confirmInput: HTMLInputElement | null = null;
   let pendingOpenDrawer = false;
   let showEmailInput = true;
   let pendingSelectId: string | null = null;
+  let authReady = false;
+  let passwordStatusResolved = false;
 
   // modal flags
   let showExperimentModal = false;
@@ -44,6 +48,10 @@
   let experimentError: string | null = null;
   let experimentResult: any = null;
   let experimentTextLimitReached = false;
+  
+  // Password visibility state
+  let showPassword = false;
+  let showConfirmPassword = false;
 
   // Delete account state
   let showDeleteConfirmation = false;
@@ -81,6 +89,7 @@
       console.error('Error checking password status:', error);
     } finally {
       checkingPassword = false;
+      passwordStatusResolved = true;
     }
   }
 
@@ -89,6 +98,7 @@
     
     // Check if user needs to create a password
     if (!showPasswordFields) {
+      if (checkingPassword) return;
       await checkPasswordStatus();
       return;
     }
@@ -98,6 +108,8 @@
       // Login
       if (!password) {
         passwordError = 'Please enter your password';
+        await tick();
+        passwordInput?.focus();
         return;
       }
       
@@ -113,11 +125,15 @@
       // Register
       if (!isValidPassword(password)) {
         passwordError = 'Password must be at least 8 characters';
+        await tick();
+        passwordInput?.focus();
         return;
       }
       
       if (!doPasswordsMatch()) {
         passwordError = 'Passwords do not match';
+        await tick();
+        confirmInput?.focus();
         return;
       }
       
@@ -279,6 +295,27 @@
     emailError = 'Please enter a valid email';
     emailInput?.focus();
   }
+  
+  function clickIsInsidePasswordArea(ev: Event) {
+    const path = (ev as any).composedPath?.() ?? [];
+    return path.includes(passwordInput) || path.includes(confirmInput) || path.includes(emailInput);
+  }
+
+  async function handleGlobalPointerDown(ev: PointerEvent) {
+    if (!showPasswordFields) return;
+
+    if (hasPassword && !password && !clickIsInsidePasswordArea(ev)) {
+      passwordError = 'Please enter your password';
+      await tick();
+      passwordInput?.focus();
+      return;
+    }
+    if (!hasPassword && (!password || !confirmPassword) && !clickIsInsidePasswordArea(ev)) {
+      passwordError = 'Please create and confirm your password';
+      await tick();
+      (password ? confirmInput : passwordInput)?.focus();
+    }
+  }
 
   // --- drawer state for the Map tile ---
   type Node = {
@@ -316,6 +353,7 @@
     }
     //  Check for existing session
     auth.checkSession().then(() => {
+      authReady = true;
       const urlParams = new URLSearchParams(window.location.search);
       const emailParam = urlParams.get('email');
       
@@ -516,6 +554,8 @@
   }
 </script>
 
+<svelte:window on:pointerdown={handleGlobalPointerDown} />
+
 <main class="container">
   <div class="dashboard-header">
     <h2>TEND<br /><span style="font-size: 0.8em; font-style: italic; color: var(--text);">nurture your connections</span></h2>
@@ -528,6 +568,7 @@
         bind:this={emailInput}
         on:input={() => { 
           emailError = ''; 
+          passwordError = '';
           showPasswordFields = false;
           hasPassword = false;
           password = '';
@@ -544,16 +585,29 @@
       {#if hasPassword}
         <!-- Login form -->
        <br>
-       <label for="password">Password:</label>
-        <input
-          type="password"
-          id="password"
-          bind:value={password}
-          on:input={() => { passwordError = ''; }}
-          placeholder="Enter your password"
-          class:error={passwordError}
-          disabled={authLoading}
-        />
+       <div class="password-field-row">
+         <label for="password">Password:</label>
+         <div class="password-input-container">
+          <input
+            type={showPassword ? "text" : "password"}
+            id="password"
+            bind:value={password}
+            bind:this={passwordInput}
+            on:input={() => { passwordError = ''; }}
+            placeholder="Enter your password"
+            class:error={passwordError}
+            disabled={authLoading}
+          />
+          <button 
+            type="button" 
+            class="toggle-password" 
+            on:click={() => showPassword = !showPassword}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+          >
+            {showPassword ? "🙈" : "👁️"}
+          </button>
+        </div>
+       </div>
         {#if passwordError}<div class="error-message">{passwordError}</div>{/if}
         <button 
           class="auth-button" 
@@ -565,27 +619,52 @@
       {:else}
         <!-- Registration form -->
         <br>
-        <label for="password">Create Password:</label>
-        <input
-          type="password"
-          id="password"
-          bind:value={password}
-          on:input={() => { passwordError = ''; }}
-          placeholder="Create a password (min 8 characters)"
-          class:error={passwordError}
-          disabled={authLoading}
-        />
-        <br>
-        <label for="confirm-password">Confirm Password:</label>
-        <input
-          type="password"
-          id="confirm-password"
-          bind:value={confirmPassword}
-          on:input={() => { passwordError = ''; }}
-          placeholder="Confirm your password"
-          class:error={passwordError}
-          disabled={authLoading}
-        />
+        <div class="password-field-row">
+          <label for="password">Create Password:</label>
+          <div class="password-input-container">
+          <input
+            type={showPassword ? "text" : "password"}
+            id="password"
+            bind:value={password}
+            bind:this={passwordInput}
+            on:input={() => { passwordError = ''; }}
+            placeholder="Create a password (min 8 characters)"
+            class:error={passwordError}
+            disabled={authLoading}
+          />
+          <button 
+            type="button" 
+            class="toggle-password" 
+            on:click={() => showPassword = !showPassword}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+          >
+            {showPassword ? "🙈" : "👁️"}
+          </button>
+        </div>
+        </div>
+        <div class="password-field-row">
+          <label for="confirm-password">Confirm Password:</label>
+          <div class="password-input-container">
+          <input
+            type={showConfirmPassword ? "text" : "password"}
+            id="confirm-password"
+            bind:value={confirmPassword}
+            bind:this={confirmInput}
+            on:input={() => { passwordError = ''; }}
+            placeholder="Confirm your password"
+            class:error={passwordError}
+            disabled={authLoading}
+          />
+          <button 
+            type="button" 
+            class="toggle-password" 
+            on:click={() => showConfirmPassword = !showConfirmPassword}
+            aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+          >
+            {showConfirmPassword ? "🙈" : "👁️"}
+          </button>
+        </div>
+        </div>
         {#if passwordError}<div class="error-message">{passwordError}</div>{/if}
         <button 
           class="auth-button" 
@@ -595,12 +674,12 @@
           {authLoading ? 'Creating Account...' : 'Create Account'}
         </button>
       {/if}
-    {:else if isValidEmail(email) && showEmailInput}
+    {:else if isValidEmail(email) && showEmailInput && authReady && passwordStatusResolved && !$user?.authenticated}
       <div class="lfg-button-container">
         <button 
-          class="lfg-button" 
+          class="lfg-button auth-lfg" 
           on:click={handleAuth}
-          disabled={authLoading || !isValidEmail(email)}
+          disabled={authLoading || !isValidEmail(email) || showPasswordFields}
         >
           LFG
         </button>
@@ -1050,9 +1129,11 @@
   .dashboard-tile.clickable { cursor: pointer; }
   .dashboard-tile.clickable:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.3); border: 3px solid white; }
 
-  .lfg-button, .lock-icon {
+  [data-tile] .lfg-button,
+  [data-tile] .lock-icon {
     position: absolute; top: 12px; left: 12px; z-index: 2;
   }
+  .auth-lfg { position: static; }
   .lfg-button {
     font-family: 'Mulish', sans-serif; font-weight: 600; font-size: 1em;
     padding: 8px 16px; border: none; border-radius: 4px; background-color: var(--button-bg); color: #fff;
@@ -1354,6 +1435,56 @@
   }
 
   .error { color: #ff6b6b; font-size: .9rem; margin-top: .5rem; }
+  
+  /* Password input styling */
+  .password-field-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    width: 100%;
+    max-width: 400px;
+  }
+  
+  .password-field-row label {
+    min-width: 130px;
+    flex-shrink: 0;
+  }
+  
+  .password-input-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    flex-grow: 1;
+  }
+  
+  .password-input-container input {
+    width: 100%;
+    padding-right: 40px; /* Make room for the toggle button */
+  }
+  
+  .toggle-password {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    color: var(--text);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+  }
+  
+  .toggle-password:hover {
+    opacity: 1;
+  }
 
   /* Experiments table */
   .experiments-grid-container { width: 100%; }
