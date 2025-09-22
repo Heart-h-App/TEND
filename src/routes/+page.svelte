@@ -1119,11 +1119,14 @@
   border: 1.5px solid var(--input-border);
   border-radius: 12px;
   color: #fff;
+  max-width: 100%;
+  box-sizing: border-box;
+  height: auto;
 }
 
 /* Center (haiku) */
 .star-center.real-northstar-text {
-  width: clamp(120px, 26vw, 220px);
+  width: min(100%, clamp(120px, 26vw, 220px));
   min-height: 7.5em;
   padding: .5rem .6rem;
   font-size: clamp(.68rem, .46rem + .42vw, 1.05rem);
@@ -1143,13 +1146,13 @@
 /* North/South wider; East/West taller */
 .star-point.real-northstar-text.north,
 .star-point.real-northstar-text.south {
-  width: clamp(160px, 40vw, 280px);
+  width: min(100%, clamp(160px, 40vw, 280px));
   min-height: 7.2em;
 }
 
 .star-point.real-northstar-text.east,
 .star-point.real-northstar-text.west {
-  width: clamp(120px, 28vw, 200px);
+  width: min(100%, clamp(120px, 28vw, 200px));
   min-height: 9em;
 }
 
@@ -1164,7 +1167,8 @@
 }
 
   /* Safety: no overflow within container */
-  .placeholder-star > * { max-width: 100%; }
+  .placeholder-star { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); }
+
 
   .northstar-grid-container {
     width: min(100%, max-content);
