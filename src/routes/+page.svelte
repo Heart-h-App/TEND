@@ -1004,9 +1004,8 @@
   .tile-preview {
     min-height: 280px; display:flex; align-items:center; justify-content:center;
     width: 100%; max-width: 100%;
-    overflow-x: auto;        /* wide children (e.g., experiments table) scroll inside tile */
+    overflow-x: visible;
   }
-  .placeholder-content { opacity: .6; width: 100%; }
   .loading-state { display:flex; align-items:center; justify-content:center; padding: 2rem; color: var(--text); font-style: italic; }
 
   /* Diagram area must scale down to tile width */
@@ -1076,10 +1075,11 @@
     gap: 0.75rem 1rem;
 
     width: min(100%, 520px);
-    height: auto;          /* let content define height */
-    margin: 0 auto;
+    height: auto;          
+    margin: 0;
     padding: 0.5rem 0.75rem;
-    position: relative;    /* no absolute children anymore */
+    position: relative;
+    min-width: 300px;
   }
   
   /* Map each box to its grid area */
@@ -1112,70 +1112,81 @@
     font-size:.84rem; color: var(--text); text-align:center; padding:.3rem;
 }
 
-  /* Real north star (tile) */
-  .star-center.real-northstar-text,
-  .star-point.real-northstar-text {
-    background: var(--input-bg);
-    border: 1.5px solid var(--input-border);
-    border-radius: 12px;
-    color: #fff;
-  }
+/* Real north star (tile) */
+.star-center.real-northstar-text,
+.star-point.real-northstar-text {
+  background: var(--input-bg);
+  border: 1.5px solid var(--input-border);
+  border-radius: 12px;
+  color: #fff;
+}
 
-  .star-center.real-northstar-text {
-    width: clamp(120px, 26vw, 220px);
-    min-height: 70px;
-    padding: .5rem .6rem;
-    font-size: .65rem !important;
-    line-height: 1.25;
-    display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;
-  }
+/* Center (haiku) */
+.star-center.real-northstar-text {
+  width: clamp(120px, 26vw, 220px);
+  min-height: 7.5em;
+  padding: .5rem .6rem;
+  font-size: clamp(.68rem, .46rem + .42vw, 1.05rem);
+  line-height: 1.25;
+  display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
+}
 
-  .star-point.real-northstar-text {
-    padding: .55rem .6rem;
-    line-height: 1.15;
-    display:flex; flex-direction: column; align-items: flex-start; text-align: left;
-    word-wrap: break-word; overflow-wrap: anywhere;
-  }
+/* Points (Growth / Vibe / Values / Avoid) */
+.star-point.real-northstar-text {
+  padding: .55rem .6rem;
+  line-height: 1.2;
+  display: flex; flex-direction: column; align-items: flex-start; text-align: left;
+  word-wrap: break-word; overflow-wrap: anywhere;
+  font-size: clamp(.54rem, .36rem + .33vw, .90rem);
+}
 
-  /* North/South wider; East/West taller */
-  .star-point.real-northstar-text.north,
-  .star-point.real-northstar-text.south {
-    width: clamp(160px, 40vw, 280px);
-    min-height: 70px;
-  }
-  .star-point.real-northstar-text.east,
-  .star-point.real-northstar-text.west {
-    width: clamp(120px, 28vw, 200px);
-    min-height: clamp(90px, 24vw, 160px);
-  }
+/* North/South wider; East/West taller */
+.star-point.real-northstar-text.north,
+.star-point.real-northstar-text.south {
+  width: clamp(160px, 40vw, 280px);
+  min-height: 7.2em;
+}
 
-  /* Typography */
-  .real-northstar-text { font-size: .52rem !important; color: #fff !important; }
-  .direction-heading   { font-weight: 700; font-size: .48rem !important; margin-bottom: .2rem; color:#888 !important; width:100%; text-align:center !important; }
+.star-point.real-northstar-text.east,
+.star-point.real-northstar-text.west {
+  width: clamp(120px, 28vw, 200px);
+  min-height: 9em;
+}
+
+/* Point headings */
+.direction-heading {
+  font-weight: 700;
+  font-size: clamp(.50rem, .34rem + .28vw, .82rem);
+  margin-bottom: .25rem;
+  color: #888;
+  width: 100%;
+  text-align: center;
+}
 
   /* Safety: no overflow within container */
   .placeholder-star > * { max-width: 100%; }
 
-  /* North Star scroll container */
   .northstar-grid-container {
-    width: 100%;
+    width: min(100%, max-content);
+    margin-inline: auto;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    margin: 0 -1rem;
-    padding: 0 1rem;
   }
 
   .northstar-scroll-container {
-    min-width: 300px;
-    padding: 1rem 0;
-    margin: 0 auto;
+    display: block;
+    width: max-content;
+  }
+
+  .placeholder-content {
+    display: block;
+    width: max-content;
   }
 
   .placeholder-star {
-    min-width: 300px; /* Prevent shrinking */
+    margin: 0;
   }
 
-  
   /* Experiment placeholder */
   .placeholder-experiment { display:flex; flex-direction: column; gap:.5rem; padding:.5rem; align-items:center; }
   .experiment-step { width: 78px; height: 42px; border: 2px dashed var(--input-border); border-radius: 10px; display:flex; align-items:center; justify-content:center; font-size:.84rem; color: var(--text); text-align:center; padding:.3rem; }
