@@ -189,7 +189,7 @@
           {/if}
           
           <div style="margin-bottom: 1rem;">
-            <h3 style="margin-bottom: 0.5rem; color: var(--heading);">Rate this experiment</h3>
+            <h3 style="margin-bottom: 0.5rem; color: var(--heading); text-align: center;">Rate this experiment</h3>
             <div style="display: flex; justify-content: center; margin-top: 0.5rem;">
               <StarRating 
                 rating={result.rating} 

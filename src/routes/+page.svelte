@@ -800,7 +800,13 @@
             <div class="experiments-grid-container">
               <div class="experiments-grid narrow-view">
                 <div class="experiments-scroll-container">
-                  <table class="experiments-table">
+                  <table class="experiments-table" style="--exp-count: {experimentsData.length}">
+                    <colgroup>
+                      <col class="col-step" />
+                      {#each experimentsData as _}
+                        <col class="col-exp" />
+                      {/each}
+                    </colgroup>
                     <thead>
                       <tr>
                         <th class="step-header"></th>
@@ -961,7 +967,7 @@
             </div>
 
             <div style="margin-bottom: 1rem;">
-              <h3 style="margin-bottom: 0.5rem; color: var(--heading);">Rate this experiment</h3>
+              <h3 style="margin-bottom: 0.5rem; color: var(--heading); text-align: center;">Rate this experiment</h3>
               <div style="display: flex; justify-content: center; margin-top: 0.5rem;">
                 <StarRating 
                   rating={experimentResult.rating} 
@@ -1353,14 +1359,46 @@
   .experiments-grid-container { width: 100%; }
   .narrow-view { display: block; }
   .experiments-scroll-container { overflow-x: auto; overflow-y: visible; width: 100%; border: 1px solid var(--input-border); border-radius: 6px; }
-  .experiments-table { width: 100%; border-collapse: collapse; min-width: fit-content; }
-  .narrow-view .experiments-table { min-width: calc(200px + 250px * var(--experiment-count, 3)); }
+  .experiments-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .col-step { width: 160px; }
+  .col-exp  { width: 220px; }
+
   .experiments-table th.experiment-header,
   .experiments-table td.experiment-cell {
-    max-width: 75%;           
-    width: clamp(120px, 22vw, 65%);
-    overflow-wrap: anywhere;
+    width: auto;
+    max-width: none;
   }
+
+  .experiments-table .step-label {
+    white-space: nowrap;
+  }
+
+  .rating-cell {
+    display: table-cell;
+    text-align: center;
+    padding: .5rem .25rem;
+    width: auto;
+    min-width: 150px;
+    max-width: 180px;
+    box-sizing: border-box;
+  }
+
+  .rating-cell :global(.star-rating) {
+    display: inline-flex;
+    width: auto;
+    max-width: none;
+    flex: 0 0 auto;
+  }
+  .rating-cell :global(.stars-container) {
+    width: auto;
+    justify-content: center;
+    flex-wrap: nowrap;
+  }
+
   .experiments-scroll-container {
     max-width: 100%;
     overflow-x: auto;
@@ -1371,11 +1409,6 @@
     white-space: nowrap;
     padding: .5rem .75rem;
   }
-  /* If your browser support is good, you can use fit-content directly */
-  .experiments-table {
-    table-layout: auto;
-  }
-
 
 
   .step-header, .experiment-header, .experiment-number-header, .status-header {
@@ -1394,39 +1427,6 @@
     vertical-align: top; font-size: .8rem; line-height: 1.3; color: var(--text); max-width: 200px; overflow-wrap: anywhere;
   }
   .narrow-view .experiment-cell { min-width: 150px; max-width: 180px; }
-  
-  .rating-cell { 
-    display: flex; 
-    justify-content: center; 
-    align-items: center; 
-    padding: 0.5rem 0.25rem; 
-    width: 100%;
-    min-width: 150px;
-    max-width: 180px;
-    box-sizing: border-box;
-  }
-  
-  .rating-cell :global(.star-rating) {
-    width: 100%;
-    max-width: 100%;
-    flex-shrink: 0;
-    flex-grow: 0;
-  }
-  
-  .rating-cell :global(.stars-container) {
-    width: 100%;
-    justify-content: center;
-    flex-wrap: nowrap;
-  }
-  
-  .rating-cell :global(.star) {
-    padding: 0;
-    margin: 0;
-  }
-  
-  .rating-cell :global(.status-container) {
-    height: 0.8rem;
-  }
 
   .toast {
   position: fixed;

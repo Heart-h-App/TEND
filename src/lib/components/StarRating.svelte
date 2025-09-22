@@ -131,20 +131,15 @@
 
 <style>
   .star-rating {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-    max-width: 100%;
+    display: inline-flex;
+    flex-wrap: nowrap;
+    gap: 0.15rem;
   }
   
   .stars-container {
-    display: flex;
-    justify-content: center;
-    gap: 0.15rem;
+    display: inline-flex;
     flex-wrap: nowrap;
-    width: 100%;
-    max-width: 100%;
+    gap: 0.15rem;
   }
   
   .star {
@@ -204,10 +199,10 @@
   
   /* Status container */
   .status-container {
-    height: 1.2rem;
-    margin-top: 0.1rem;
-    width: 100%;
-    text-align: center;
+    display: inline-block;
+    min-height: 1rem;
+    margin-left: 0.25rem;
+    vertical-align: middle;
   }
   
   /* Status messages */
