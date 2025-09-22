@@ -3,13 +3,16 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { auth, user } from '$lib/stores/auth';
+  import StarRating from '$lib/components/StarRating.svelte';
     
   type Experiment = {
+      id?: string;
       challenge: string;
       hypothesis: string;
       intervention: string;
       measure: string;
       learnings: string | null;
+      rating?: number | null;
       createdAt: string;
       updatedAt: string;
     };
@@ -75,6 +78,8 @@
               console.error('Save failed:', saved?.error);
             } else {
               console.log('Saved experiment id:', saved.id);
+              // Update the result with the saved experiment ID and other DB fields
+              result = { ...result, id: saved.id, createdAt: saved.createdAt, updatedAt: saved.updatedAt };
             }
           } catch (saveError) {
             console.error('Failed to save experiment:', saveError);
@@ -182,6 +187,18 @@
               <p style="margin-bottom: 1rem;">{result.learnings}</p>
             </div>
           {/if}
+          
+          <div style="margin-bottom: 1rem;">
+            <h3 style="margin-bottom: 0.5rem; color: var(--heading);">Rate this experiment</h3>
+            <div style="display: flex; justify-content: center; margin-top: 0.5rem;">
+              <StarRating 
+                rating={result.rating} 
+                experimentId={result.id} 
+                ownerEmail={ownerEmail} 
+                size="large" 
+              />
+            </div>
+          </div>
           <!-- Action buttons -->
           <div style="text-align:center; margin-top:1.5rem; display: flex; justify-content: center; gap: 1rem;">
             <button class="lfg-button" on:click={returnToDashboard}>

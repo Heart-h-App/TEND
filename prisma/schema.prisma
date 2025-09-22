@@ -44,6 +44,7 @@ model Experiment {
   intervention String
   measure      String
   learnings    String?
+  rating       Int?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

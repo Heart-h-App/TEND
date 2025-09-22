@@ -3,6 +3,7 @@
   import { onMount, tick } from 'svelte';
   import { auth, user } from '$lib/stores/auth';
   import Diagram from "$lib/components/diagramConnection.svelte";
+  import StarRating from "$lib/components/StarRating.svelte";
   import { writable } from 'svelte/store';
   export const toast = writable<string | null>(null);
 
@@ -152,13 +153,16 @@
     }
   }
   function mapTileClickable() {
-    return isValidEmail(email) && !mapData;
+    // Only clickable if user is authenticated (has password and is logged in)
+    return isValidEmail(email) && !mapData && $user && $user.authenticated;
   }
   function northStarTileClickable() {
-    return isValidEmail(email) && mapData && !northStarData;
+    // Only clickable if user is authenticated and has a map but no north star
+    return isValidEmail(email) && mapData && !northStarData && $user && $user.authenticated;
   }
   function experimentsTileClickable() {
-    return isValidEmail(email); // Always unlocked
+    // Only clickable if user is authenticated
+    return isValidEmail(email) && $user && $user.authenticated;
   }
 
   function tileKeyActivate(e: KeyboardEvent, handler: () => void) {
@@ -169,7 +173,7 @@
   }
 
   async function checkForExistingMap() {
-    if (!email.trim()) { mapData = null; return; }
+    if (!email.trim()) { mapData = null; return mapData; }
     loadingMap = true;
     try {
       const res = await fetch(`/api/relationships?ownerEmail=${encodeURIComponent(email)}`);
@@ -179,16 +183,16 @@
       } else {
         mapData = null;
       }
+      return mapData;
     } catch (e) {
-      console.error('Failed to check existing relationships:', e);
       mapData = null;
+      return mapData;
     } finally {
       loadingMap = false;
     }
   }
 
   $: if (mapData && pendingOpenDrawer) {
-    console.log('Opening map drawer for:', pendingSelectId);
     // Wait a moment to ensure the UI is ready
     setTimeout(() => {
       openMapDrawerFor(pendingSelectId || 'connection');
@@ -204,7 +208,7 @@
   }
 
   async function checkForExistingNorthStar() {
-    if (!email.trim()) { northStarData = null; return; }
+    if (!email.trim()) { northStarData = null; return northStarData; }
     loadingNorthStar = true;
     try {
       const res = await fetch(`/api/northStar?ownerEmail=${encodeURIComponent(email)}`);
@@ -214,16 +218,17 @@
       } else {
         northStarData = null;
       }
+      return northStarData;
     } catch (e) {
-      console.error('Failed to check existing north stars:', e);
       northStarData = null;
+      return northStarData;
     } finally {
       loadingNorthStar = false;
     }
   }
 
   async function checkForExistingExperiments() {
-    if (!email.trim()) { experimentsData = null; return; }
+    if (!email.trim()) { experimentsData = null; return experimentsData; }
     loadingExperiments = true;
     try {
       const res = await fetch(`/api/experiments?ownerEmail=${encodeURIComponent(email)}`);
@@ -237,9 +242,10 @@
       } else {
         experimentsData = null;
       }
+      return experimentsData;
     } catch (e) {
-      console.error('Failed to check existing experiments:', e);
       experimentsData = null;
+      return experimentsData;
     } finally {
       loadingExperiments = false;
     }
@@ -317,9 +323,22 @@
       if ($user && $user.authenticated && $user.email) {
         email = $user.email;
         showEmailInput = false; // Hide email input for authenticated users
-        checkForExistingMap();
-        checkForExistingNorthStar();
-        checkForExistingExperiments();
+        
+        // Load data and then check if we should show the experiment modal
+        Promise.all([
+          checkForExistingMap(),
+          checkForExistingNorthStar(),
+          checkForExistingExperiments()
+        ]).then(() => {
+          // Auto-trigger experiment modal if user doesn't have both map and north star
+          // We want to encourage users to create experiments even if they haven't created map/north star
+          if (isValidEmail(email) && (!mapData || !northStarData) && !experimentsData) {
+            // Short timeout to ensure UI is ready
+            setTimeout(() => {
+              showExperimentModal = true;
+            }, 500);
+          }
+        });
         
         // Check URL params for modal opening
         const openModal = urlParams.get('openModal');
@@ -477,8 +496,14 @@
             body: JSON.stringify({ ownerEmail: email, ...experimentResult })
           });
           const saved = await res2.json();
-          if (!res2.ok) console.error('Save failed:', saved?.error);
-          else checkForExistingExperiments();
+          if (!res2.ok) {
+            console.error('Save failed:', saved?.error);
+          } else {
+            // Update the experimentResult with the saved experiment ID and other DB fields
+            experimentResult = { ...experimentResult, id: saved.id, createdAt: saved.createdAt, updatedAt: saved.updatedAt };
+            // Refresh the experiments list
+            checkForExistingExperiments();
+          }
         } catch (saveError) {
           console.error('Failed to save experiment:', saveError);
         }
@@ -599,7 +624,11 @@
       <div class="tile-header">
         <h3>🗺️ Relationship Map</h3>
         {#if isValidEmail(email) && !mapData}
-          <button class="lfg-button" on:click|stopPropagation={() => goto('/mapConnection')} aria-label="Create your relationship map">LFG</button>
+          {#if $user && $user.authenticated}
+            <button class="lfg-button" on:click|stopPropagation={() => goto('/mapConnection')} aria-label="Create your relationship map">LFG</button>
+          {:else}
+            <button class="lock-icon" on:click|stopPropagation={() => { checkPasswordStatus(); emailInput?.focus(); }} title="Please enter your password to unlock" aria-label="Locked - enter password to unlock">🔒</button>
+          {/if}
         {/if}    
       </div>
       <div class="tile-content">
@@ -678,10 +707,12 @@
     >
       <div class="tile-header">
         <h3>⭐ North Star</h3>
-        {#if isValidEmail(email) && !mapData}
-          <div class="lock-icon" aria-hidden="true">🔒</div>
-        {:else if isValidEmail(email) && !northStarData}
-          <button class="lfg-button" on:click|stopPropagation={handleLfgNorthStar} aria-label="Create your north star">LFG</button>
+        {#if isValidEmail(email) && mapData && !northStarData}
+          {#if $user && $user.authenticated}
+            <button class="lfg-button" on:click|stopPropagation={handleLfgNorthStar} aria-label="Create your north star">LFG</button>
+          {:else}
+            <button class="lock-icon" on:click|stopPropagation={() => { checkPasswordStatus(); emailInput?.focus(); }} title="Please enter your password to unlock" aria-label="Locked - enter password to unlock">🔒</button>
+          {/if}
         {/if}    
       </div>
       <div class="tile-content">
@@ -751,9 +782,13 @@
       <div class="tile-header">
         <h3>🧪 Experiments</h3>
         {#if isValidEmail(email)}
-          <button class="lfg-button" on:click|stopPropagation={handleLfgExperiments} aria-label="Create a new experiment">
-            {experimentsData && experimentsData.length > 0 ? 'Create New' : 'LFG'}
-          </button>
+          {#if $user && $user.authenticated}
+            <button class="lfg-button" on:click|stopPropagation={handleLfgExperiments} aria-label="Create a new experiment">
+              {experimentsData && experimentsData.length > 0 ? 'Create New' : 'LFG'}
+            </button>
+          {:else}
+            <button class="lock-icon" on:click|stopPropagation={() => { checkPasswordStatus(); emailInput?.focus(); }} title="Please enter your password to unlock" aria-label="Locked - enter password to unlock">🔒</button>
+          {/if}
         {/if}    
       </div>
       <div class="tile-content">
@@ -800,6 +835,20 @@
                         <td class="step-label">Measure</td>
                         {#each experimentsData as experiment}
                           <td class="experiment-cell" title={experiment.measure}>{experiment.measure}</td>
+                        {/each}
+                      </tr>
+                      <tr>
+                        <td class="step-label">Rating</td>
+                        {#each experimentsData as experiment}
+                          <td class="experiment-cell rating-cell" on:click|stopPropagation>
+                            <StarRating 
+                              rating={experiment.rating} 
+                              experimentId={experiment.id} 
+                              ownerEmail={email} 
+                              size="small" 
+                              readonly={false}
+                            />
+                          </td>
                         {/each}
                       </tr>
                     </tbody>
@@ -909,6 +958,18 @@
             <div style="margin-bottom: 1rem;">
               <h3 style="margin-bottom: 0.5rem; color: var(--heading);">Measure</h3>
               <p style="margin-bottom: 1rem;">{experimentResult.measure}</p>
+            </div>
+
+            <div style="margin-bottom: 1rem;">
+              <h3 style="margin-bottom: 0.5rem; color: var(--heading);">Rate this experiment</h3>
+              <div style="display: flex; justify-content: center; margin-top: 0.5rem;">
+                <StarRating 
+                  rating={experimentResult.rating} 
+                  experimentId={experimentResult.id} 
+                  ownerEmail={email} 
+                  size="large" 
+                />
+              </div>
             </div>
 
             <h2>Want experiments more tailored to you?</h2>
@@ -1270,6 +1331,22 @@
   .primary-btn { padding: 1rem 2rem; background: var(--button-bg); color:#fff; border:none; border-radius:8px; font-size: 1.1rem; font-weight:600; cursor:pointer; transition: background-color .2s ease; }
   .primary-btn:hover { background: var(--button-hover); }
 
+  .lock-icon {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    color: var(--text);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+  }
+  
+  .lock-icon:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    transform: scale(1.1);
+  }
+
   .error { color: #ff6b6b; font-size: .9rem; margin-top: .5rem; }
 
   /* Experiments table */
@@ -1317,6 +1394,39 @@
     vertical-align: top; font-size: .8rem; line-height: 1.3; color: var(--text); max-width: 200px; overflow-wrap: anywhere;
   }
   .narrow-view .experiment-cell { min-width: 150px; max-width: 180px; }
+  
+  .rating-cell { 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    padding: 0.5rem 0.25rem; 
+    width: 100%;
+    min-width: 150px;
+    max-width: 180px;
+    box-sizing: border-box;
+  }
+  
+  .rating-cell :global(.star-rating) {
+    width: 100%;
+    max-width: 100%;
+    flex-shrink: 0;
+    flex-grow: 0;
+  }
+  
+  .rating-cell :global(.stars-container) {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: nowrap;
+  }
+  
+  .rating-cell :global(.star) {
+    padding: 0;
+    margin: 0;
+  }
+  
+  .rating-cell :global(.status-container) {
+    height: 0.8rem;
+  }
 
   .toast {
   position: fixed;
