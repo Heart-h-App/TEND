@@ -1212,7 +1212,7 @@
   /* Turn container into a 3x3 grid with center in the middle */
   .placeholder-star {
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    grid-template-columns: minmax(110px, 1fr) minmax(200px, 1fr) minmax(110px, 1fr);
     grid-template-rows: auto auto auto;
     grid-template-areas:
     ". north ."
@@ -1222,7 +1222,7 @@
     justify-items: center;
     gap: 0.75rem 1rem;
 
-    width: min(100%, 520px);
+    width: 100%;
     height: auto;          
     margin: 0;
     padding: 0.5rem 0.75rem;
@@ -1315,25 +1315,25 @@
   text-align: center;
 }
 
-  /* Safety: no overflow within container */
-  .placeholder-star { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); }
-
-
   .northstar-grid-container {
-    width: min(100%, max-content);
+    display: block;
+    width: 100%;
     margin-inline: auto;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
   }
 
   .northstar-scroll-container {
     display: block;
-    width: max-content;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
   }
 
   .placeholder-content {
     display: block;
-    width: max-content;
+    width: auto;
+    margin-inline: auto;
+    max-width: 100%;
   }
 
   .placeholder-star {
