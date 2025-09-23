@@ -560,78 +560,45 @@
   <div class="dashboard-header">
     <h2>TEND<br /><span style="font-size: 0.8em; font-style: italic; color: var(--text);">nurture your connections</span></h2>
 
-    {#if showEmailInput}
-      <label for="owner-email">Email:</label>
-      <input
-        type="email"
-        bind:value={email}
-        bind:this={emailInput}
-        on:input={() => { 
-          emailError = ''; 
-          passwordError = '';
-          showPasswordFields = false;
-          hasPassword = false;
-          password = '';
-          confirmPassword = '';
-        }}
-        placeholder="Enter your email"
-        class:error={emailError}
-        disabled={authLoading}
-      />
+    <form on:submit|preventDefault={handleAuth}>
+      {#if showEmailInput}
+        <label for="owner-email">Email:</label>
+        <input
+          type="email"
+          bind:value={email}
+          bind:this={emailInput}
+          on:input={() => { 
+            emailError = ''; 
+            passwordError = '';
+            showPasswordFields = false;
+            hasPassword = false;
+            password = '';
+            confirmPassword = '';
+          }}
+          placeholder="Enter your email"
+          class:error={emailError}
+          disabled={authLoading}
+        />
       {#if emailError}<div class="error-message">{emailError}</div>{/if}
-    {/if}
+      {/if}
     
-    {#if showPasswordFields}
-      {#if hasPassword}
-        <!-- Login form -->
-       <br>
-       <div class="password-field-row">
-         <label for="password">Password:</label>
-         <div class="password-input-container">
-          <input
-            type={showPassword ? "text" : "password"}
-            id="password"
-            bind:value={password}
-            bind:this={passwordInput}
-            on:input={() => { passwordError = ''; }}
-            placeholder="Enter your password"
-            class:error={passwordError}
-            disabled={authLoading}
-          />
-          <button 
-            type="button" 
-            class="toggle-password" 
-            on:click={() => showPassword = !showPassword}
-            aria-label={showPassword ? "Hide password" : "Show password"}
-          >
-            {showPassword ? "🙈" : "👁️"}
-          </button>
-        </div>
-       </div>
-        {#if passwordError}<div class="error-message">{passwordError}</div>{/if}
-        <button 
-          class="auth-button" 
-          on:click={handleAuth} 
-          disabled={authLoading || !isValidEmail(email) || !password}
-        >
-          {authLoading ? 'Logging in...' : 'Login'}
-        </button>
-      {:else}
-        <!-- Registration form -->
+      {#if showPasswordFields}
+        {#if hasPassword}
+          <!-- Login form -->
         <br>
         <div class="password-field-row">
-          <label for="password">Create Password:</label>
+          <label for="password">Password:</label>
           <div class="password-input-container">
-          <input
-            type={showPassword ? "text" : "password"}
-            id="password"
-            bind:value={password}
-            bind:this={passwordInput}
-            on:input={() => { passwordError = ''; }}
-            placeholder="Create a password (min 8 characters)"
-            class:error={passwordError}
-            disabled={authLoading}
-          />
+            <input
+              type={showPassword ? "text" : "password"}
+              id="password"
+              bind:value={password}
+              bind:this={passwordInput}
+              on:input={() => { passwordError = ''; }}
+              placeholder="Enter your password"
+              class:error={passwordError}
+              disabled={authLoading}
+            />
           <button 
             type="button" 
             class="toggle-password" 
@@ -642,39 +609,73 @@
           </button>
         </div>
         </div>
-        <div class="password-field-row">
-          <label for="confirm-password">Confirm Password:</label>
-          <div class="password-input-container">
-          <input
-            type={showConfirmPassword ? "text" : "password"}
-            id="confirm-password"
-            bind:value={confirmPassword}
-            bind:this={confirmInput}
-            on:input={() => { passwordError = ''; }}
-            placeholder="Confirm your password"
-            class:error={passwordError}
-            disabled={authLoading}
-          />
+          {#if passwordError}<div class="error-message">{passwordError}</div>{/if}
           <button 
-            type="button" 
-            class="toggle-password" 
-            on:click={() => showConfirmPassword = !showConfirmPassword}
-            aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+            class="auth-button" 
+            on:click={handleAuth} 
+            disabled={authLoading || !isValidEmail(email) || !password}
           >
-            {showConfirmPassword ? "🙈" : "👁️"}
+            {authLoading ? 'Logging in...' : 'Login'}
           </button>
-        </div>
-        </div>
-        {#if passwordError}<div class="error-message">{passwordError}</div>{/if}
-        <button 
-          class="auth-button" 
-          on:click={handleAuth} 
-          disabled={authLoading || !isValidEmail(email) || !password || !confirmPassword}
-        >
-          {authLoading ? 'Creating Account...' : 'Create Account'}
-        </button>
-      {/if}
-    {:else if isValidEmail(email) && showEmailInput && authReady && passwordStatusResolved && !$user?.authenticated}
+        {:else}
+          <!-- Registration form -->
+          <br>
+          <div class="password-field-row">
+            <label for="password">Create Password:</label>
+            <div class="password-input-container">
+              <input
+                type={showPassword ? "text" : "password"}
+                id="password"
+                bind:value={password}
+                bind:this={passwordInput}
+                on:input={() => { passwordError = ''; }}
+                placeholder="Create a password (min 8 characters)"
+                class:error={passwordError}
+                disabled={authLoading}
+              />
+              <button 
+                type="button" 
+                class="toggle-password" 
+                on:click={() => showPassword = !showPassword}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? "🙈" : "👁️"}
+              </button>
+            </div>
+          </div>
+          <div class="password-field-row">
+            <label for="confirm-password">Confirm Password:</label>
+            <div class="password-input-container">
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                id="confirm-password"
+                bind:value={confirmPassword}
+                bind:this={confirmInput}
+                on:input={() => { passwordError = ''; }}
+                placeholder="Confirm your password"
+                class:error={passwordError}
+                disabled={authLoading}
+              />
+              <button 
+                type="button" 
+                class="toggle-password" 
+                on:click={() => showConfirmPassword = !showConfirmPassword}
+                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+              >
+                {showConfirmPassword ? "🙈" : "👁️"}
+              </button>
+            </div>
+          </div>
+          {#if passwordError}<div class="error-message">{passwordError}</div>{/if}
+          <button 
+            class="auth-button" 
+            on:click={handleAuth} 
+            disabled={authLoading || !isValidEmail(email) || !password || !confirmPassword}
+          >
+            {authLoading ? 'Creating Account...' : 'Create Account'}
+          </button>
+        {/if}
+      {:else if isValidEmail(email) && showEmailInput && authReady && passwordStatusResolved && !$user?.authenticated}
       <div class="lfg-button-container">
         <button 
           class="lfg-button auth-lfg" 
@@ -684,7 +685,8 @@
           LFG
         </button>
       </div>
-    {/if}
+      {/if}
+    </form>
   </div>
 
   <div class="dashboard-grid">
@@ -803,7 +805,7 @@
             <div class="northstar-grid-container">
               <div class="northstar-scroll-container">
                 <div class="placeholder-content">
-                  <div class="placeholder-star">
+                  <div class="placeholder-star star--real">
                     <div class="star-center real-northstar-text">
                       {#if northStarData.haiku}
                         {#each northStarData.haiku.split(',') as line, index}
@@ -832,15 +834,19 @@
               </div>
             </div>
           {:else}
-            <div class="placeholder-content">
-              <div class="placeholder-star">
-                <div class="star-center">Essence</div>
-                <div class="star-point north">Growth</div>
-                <div class="star-point east">Vibe</div>
-                <div class="star-point south">Values</div>
-                <div class="star-point west">Avoid</div>
+          <div class="northstar-grid-container">
+            <div class="northstar-scroll-container">
+              <div class="placeholder-content">
+                <div class="placeholder-star star--placeholder">
+                  <div class="star-center">Essence</div>
+                  <div class="star-point north">Growth</div>
+                  <div class="star-point east">Vibe</div>
+                  <div class="star-point south">Values</div>
+                  <div class="star-point west">Avoid</div>
+                </div>
               </div>
             </div>
+          </div>
           {/if}
         </div>
       </div>
@@ -1212,7 +1218,7 @@
   /* Turn container into a 3x3 grid with center in the middle */
   .placeholder-star {
     display: grid;
-    grid-template-columns: minmax(110px, 1fr) minmax(200px, 1fr) minmax(110px, 1fr);
+    grid-template-columns: minmax(80px, 90px) minmax(80px, 90px) minmax(80px, 90px);
     grid-template-rows: auto auto auto;
     grid-template-areas:
     ". north ."
@@ -1228,6 +1234,11 @@
     padding: 0.5rem 0.75rem;
     position: relative;
     min-width: 300px;
+  }
+
+  /* Real star: wider center */
+  .placeholder-star.star--real {
+    grid-template-columns: minmax(110px, 1fr) minmax(200px, 120px) minmax(110px, 1fr);
   }
   
   /* Map each box to its grid area */
@@ -1338,6 +1349,10 @@
 
   .placeholder-star {
     margin: 0;
+  }
+
+  .placeholder-star.star--placeholder {
+    justify-content: center;
   }
 
   /* Experiment placeholder */
