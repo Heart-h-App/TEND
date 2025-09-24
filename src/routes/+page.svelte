@@ -1277,7 +1277,7 @@
   background: var(--input-bg);
   border: 1.5px solid var(--input-border);
   border-radius: 12px;
-  color: #fff;
+  color: var(--text);
   max-width: 100%;
   box-sizing: border-box;
   height: auto;

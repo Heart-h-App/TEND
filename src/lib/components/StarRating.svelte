@@ -163,11 +163,12 @@
   }
   
   .filled .star-icon {
-    color: #FFD700; /* Gold color for filled stars */
+    color: var(--color-warning, #FFD700); /* Use warning color for filled stars */
   }
   
   .unfilled .star-icon {
-    color: #888; /* Gray color for unfilled stars */
+    color: var(--input-border);
+    opacity: 0.7;
   }
   
   /* Size variants */
@@ -213,14 +214,15 @@
   }
   
   .loading {
-    color: #888;
+    color: var(--text);
+    opacity: 0.8;
   }
   
   .error {
-    color: #ff4444;
+    color: var(--color-error);
   }
   
   .success {
-    color: #4CAF50;
+    color: var(--color-success);
   }
 </style>

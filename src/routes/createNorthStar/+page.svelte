@@ -206,7 +206,7 @@
   .floating-label {
     display: block;
     font-size: 0.9rem;
-    color: white;
+    color: var(--text);
     font-weight: 500;
     margin-bottom: 0.5rem;
   }

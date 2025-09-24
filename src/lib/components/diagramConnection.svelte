@@ -123,7 +123,7 @@
     pointer-events: all;
   }
   .node-group:hover .node { 
-    stroke: white;
+    stroke: var(--brand-soft);
     stroke-width: 3;
   }
   .node-group:focus { 

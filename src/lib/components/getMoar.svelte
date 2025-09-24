@@ -24,6 +24,6 @@
   
   .footer-cta-button:hover,
   .footer-cta-button:focus {
-    background-color: var(--button-hover-bg, #4a5568);
+    background-color: var(--button-hover);
   }
 </style>

@@ -5,11 +5,19 @@
 
 /* Default (dark) theme variables */
 :root {
+  /* Brand colors */
   --brand-primary: #AA4B41;  /* Reddish */
   --brand-accent: #F2A0A1;   /* Coral */
   --brand-deep: #223A5E;     /* Navy */
   --brand-soft: #C3D6C6;     /* Near white */
-
+  
+  /* Status colors */
+  --color-error: #ff4444;
+  --color-success: #4CAF50;
+  --color-warning: #FFA500;
+  --color-info: #2196F3;
+  
+  /* UI colors */
   --bg: #1e1e1e;
   --text: #E0E0E0;
   --button-bg: var(--brand-deep);
@@ -18,19 +26,33 @@
   --input-border: #555;
   --link: var(--brand-accent);
   --heading: var(--brand-primary);
+  
+  /* For backward compatibility */
+  --error-color: var(--color-error);
+  --success-color: var(--color-success);
 }
 
 /* Light mode overrides */
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: var(--brand-soft);
-    --text: var(--brand-deep);
-    --button-bg: var(--brand-deep);
-    --button-hover: #2F4F3A;
-    --input-bg: white;
-    --input-border: #ccc;
-    --link: var(--brand-primary);
-    --heading: var(--brand-primary);
+    --bg: var(--brand-soft);                     /* #C3D6C6 */
+    --bg-secondary: rgba(195, 214, 198, 0.9);   /* 90% opacity */
+    --bg-tertiary: rgba(195, 214, 198, 0.7);    /* 70% opacity */
+    --text: var(--brand-deep);                  /* #223A5E */
+    --button-bg: var(--brand-deep);             /* #223A5E */
+    --button-hover: rgba(34, 58, 94, 0.9);      /* 90% opacity */
+    --input-bg: rgba(255, 255, 255, 0.8);       /* Slightly transparent white */
+    --input-border: rgba(34, 58, 94, 0.3);      /* 30% opacity brand-deep */
+    --link: var(--brand-primary);               /* #AA4B41 */
+    --heading: var(--brand-deep);               /* #223A5E */
+    --card-bg: rgba(255, 255, 255, 0.7);        /* Slightly transparent white */
+    --card-border: rgba(34, 58, 94, 0.2);       /* 20% opacity brand-deep */
+    
+    /* Adjust status colors for light mode */
+    --color-error: #d32f2f;
+    --color-success: #2e7d32;
+    --color-warning: #ed6c02;
+    --color-info: #0288d1;
   }
 }
 
@@ -76,8 +98,7 @@ button.backdrop:hover {
 }
 
 button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  opacity: 0.9;
 }
 
 /* Inputs and Textareas */
@@ -120,16 +141,17 @@ a:hover {
 
 /* Cards and panels */
 .card {
-  background-color: var(--input-bg);
-  border: 1px solid var(--input-border);
+  background-color: var(--card-bg, var(--input-bg));
+  border: 1px solid var(--card-border, var(--input-border));
   border-radius: 8px;
   padding: 1rem;
   margin: 1rem 0;
+  backdrop-filter: blur(4px);
 }
 
 /* Side panel styling */
 .side-panel {
-  background-color: var(--bg);
+  background-color: var(--bg-secondary, var(--bg));
   border-left: 1px solid var(--input-border);
   color: var(--text);
 }

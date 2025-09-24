@@ -124,7 +124,7 @@
     font-size: 0.9rem;
     transition: background-color 0.2s;
   }
-  .logout-button:hover { background-color: #c83232; }
+  .logout-button:hover { background-color: var(--brand-primary, #c83232); }
 
   /* stack behaviors under ~796px */
   @media (max-width: 796px) {
