@@ -575,7 +575,7 @@
             password = '';
             confirmPassword = '';
           }}
-          placeholder="Enter your email"
+          placeholder="Sign up or log in with your email"
           class:error={emailError}
           disabled={authLoading}
         />
