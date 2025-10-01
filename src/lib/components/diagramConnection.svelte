@@ -33,9 +33,34 @@
     status === "on track" ? "" : "3,6";
 
   const dispatch = createEventDispatcher();
+
+  // Calculate dynamic viewBox based on node positions
+  let viewBox = "0 0 800 300";
+  $: if (nodes.length > 0) {
+    const padding = 40;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    nodes.forEach(node => {
+      const width = node.width || 180;
+      const height = node.height || 120;
+      
+      minX = Math.min(minX, node.x);
+      minY = Math.min(minY, node.y);
+      maxX = Math.max(maxX, node.x + width);
+      maxY = Math.max(maxY, node.y + height);
+    });
+
+    if (isFinite(minX) && isFinite(minY) && isFinite(maxX) && isFinite(maxY)) {
+      const vbX = Math.max(0, minX - padding);
+      const vbY = Math.max(0, minY - padding);
+      const vbWidth = maxX - minX + (2 * padding);
+      const vbHeight = maxY - minY + (2 * padding);
+      viewBox = `${vbX} ${vbY} ${vbWidth} ${vbHeight}`;
+    }
+  }
 </script>
 
-<svg class="diagram" viewBox="0 0 800 300" role="img" aria-label="Relationship diagram">
+<svg class="diagram" {viewBox} preserveAspectRatio="xMinYMin meet" role="img" aria-label="Relationship diagram">
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto">
       <path d="M0,0 L10,5 L0,10 z" fill="var(--input-border)" />
@@ -97,7 +122,13 @@
 </svg>
 
 <style>
-  .diagram { width: 100%; height: auto; display: block; }
+  .diagram { 
+    width: 100%; 
+    height: 100%; 
+    display: block;
+    min-width: 100%;
+    min-height: 100%;
+  }
   .node    { 
     fill: var(--input-bg); 
     stroke: var(--input-border); 

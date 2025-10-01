@@ -20,6 +20,8 @@
   let ownerEmail = '';
   let checkingExistingRelationship = false;
   let textLimitReached = false;
+  let showDeleteConfirmation = false;
+  let deletingRelationship = false;
 
   // Get email from URL parameters and check authentication
   onMount(() => {
@@ -77,6 +79,48 @@
 
   // Check if text limit is reached
   $: textLimitReached = text.length >= 2000;
+
+  function handleDeleteRelationship() {
+    showDeleteConfirmation = true;
+  }
+
+  async function confirmDeleteRelationship() {
+    if (!result) return;
+    
+    deletingRelationship = true;
+    try {
+      const response = await fetch('/api/relationships', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          ownerEmail,
+          name: result.name,
+          description: result.description
+        })
+      });
+      
+      if (response.status >= 200 && response.status < 300) {
+        // Close modals and reset
+        showDeleteConfirmation = false;
+        selected = null;
+        result = null;
+        text = '';
+        localStorage.setItem('flash', 'Relationship deleted successfully');
+        goto(`/?email=${encodeURIComponent(ownerEmail)}`);
+      } else {
+        try {
+          const errorData = await response.json();
+          alert(`Failed to delete relationship: ${errorData.error || 'Please try again.'}`);
+        } catch {
+          alert(`Failed to delete relationship. Status: ${response.status}`);
+        }
+      }
+    } catch (e) {
+      alert(`Failed to delete relationship: ${e instanceof Error ? e.message : 'Please try again.'}`);
+    } finally {
+      deletingRelationship = false;
+    }
+  }
 
   async function mapConnection() {
     error = null;
@@ -250,7 +294,7 @@
           {/if}
 
           {#if selected.details}
-            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem;">
               {#each Object.entries(selected.details) as [label, text]}
                 <div style="background-color: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px; padding: 1rem; margin: 0;">
                   <div style="font-weight: 600; margin-bottom: 0.5rem; color: var(--heading); font-size: 1.1em;">{label}</div>
@@ -259,11 +303,60 @@
               {/each}
             </div>
           {/if}
+
+          <div style="margin-top: auto; padding-top: 1.5rem; border-top: 1px solid var(--input-border);">
+            <button
+              on:click={handleDeleteRelationship}
+              style="width: 100%; padding: 0.75rem; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;"
+              aria-label="Delete relationship"
+              title="Delete this relationship"
+            >
+              Delete Relationship
+            </button>
+          </div>
         </aside>
       {/if}
     {/if}
   </div>
 </main>
+
+<!-- Delete Confirmation Modal -->
+{#if showDeleteConfirmation}
+  <div 
+    style="position: fixed; inset: 0; background-color: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 100;"
+    on:click={() => (showDeleteConfirmation = false)}
+    on:keydown={(e) => e.key === 'Escape' && (showDeleteConfirmation = false)}
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+  >
+    <div 
+      style="background-color: var(--card-bg); padding: 2rem; border-radius: 8px; max-width: 400px; width: 90%;"
+      on:click|stopPropagation
+      role="document"
+    >
+      <h3 style="margin-top: 0; color: var(--heading);">Delete Relationship</h3>
+      <p>Are you sure you want to delete this relationship?</p>
+      <p><strong>This action cannot be undone.</strong></p>
+      <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+        <button 
+          style="flex: 1; padding: 0.75rem; background-color: var(--input-bg); color: var(--text); border: 1px solid var(--input-border); border-radius: 4px; cursor: pointer; font-weight: 600;"
+          on:click={() => (showDeleteConfirmation = false)} 
+          disabled={deletingRelationship}
+        >
+          Cancel
+        </button>
+        <button 
+          style="flex: 1; padding: 0.75rem; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;"
+          on:click={confirmDeleteRelationship} 
+          disabled={deletingRelationship}
+        >
+          {deletingRelationship ? 'Deleting...' : 'Yes, Delete Relationship'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .input-group {

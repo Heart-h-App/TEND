@@ -23,7 +23,7 @@
   let passwordError = '';
   let checkingPassword = false;
   let authLoading = false;
-  let mapData: any = null;
+  let mapData: any[] = [];
   let loadingMap = false;
   let northStarData: any = null;
   let loadingNorthStar = false;
@@ -41,6 +41,11 @@
 
   // modal flags
   let showExperimentModal = false;
+  let showAddRelationshipDrawer = false;
+  let relationshipText = '';
+  let relationshipLoading = false;
+  let relationshipError: string | null = null;
+  let relationshipTextLimitReached = false;
 
   // Experiment modal state
   let experimentText = '';
@@ -56,6 +61,10 @@
   // Delete account state
   let showDeleteConfirmation = false;
   let deletingAccount = false;
+
+  // Delete relationship state
+  let showDeleteRelationshipConfirmation = false;
+  let deletingRelationship = false;
 
   // debounce
   let debounceTimer: NodeJS.Timeout | null = null;
@@ -170,15 +179,15 @@
   }
   function mapTileClickable() {
     // Only clickable if user is authenticated (has password and is logged in)
-    return isValidEmail(email) && !mapData && $user && $user.authenticated;
+    return isValidEmail(email) && mapData.length === 0 && $user && $user.authenticated;
   }
   function northStarTileClickable() {
     // Only clickable if user is authenticated and has a map but no north star
-    return isValidEmail(email) && mapData && !northStarData && $user && $user.authenticated;
+    return isValidEmail(email) && mapData.length > 0 && !northStarData && $user && $user.authenticated;
   }
   function experimentsTileClickable() {
-    // Only clickable if user is authenticated
-    return isValidEmail(email) && $user && $user.authenticated;
+    // Only clickable if user is authenticated and has both map and north star
+    return isValidEmail(email) && mapData.length > 0 && northStarData && $user && $user.authenticated;
   }
 
   function tileKeyActivate(e: KeyboardEvent, handler: () => void) {
@@ -189,29 +198,29 @@
   }
 
   async function checkForExistingMap() {
-    if (!email.trim()) { mapData = null; return mapData; }
+    if (!email.trim()) { mapData = []; return mapData; }
     loadingMap = true;
     try {
       const res = await fetch(`/api/relationships?ownerEmail=${encodeURIComponent(email)}`);
       if (res.ok) {
         const data = await res.json();
-        mapData = data.length > 0 ? data[0] : null;
+        mapData = Array.isArray(data) ? data : [];
       } else {
-        mapData = null;
+        mapData = [];
       }
       return mapData;
     } catch (e) {
-      mapData = null;
+      mapData = [];
       return mapData;
     } finally {
       loadingMap = false;
     }
   }
 
-  $: if (mapData && pendingOpenDrawer) {
+  $: if (mapData.length > 0 && pendingOpenDrawer) {
     // Wait a moment to ensure the UI is ready
     setTimeout(() => {
-      openMapDrawerFor(pendingSelectId || 'connection');
+      openMapDrawerFor(pendingSelectId || 'rel-0');
       pendingOpenDrawer = false;
       pendingSelectId = null;
 
@@ -281,6 +290,13 @@
     }
   }
 
+  function handleKeyDown(event: KeyboardEvent) {
+    // Nudge for email if field is visible and email is invalid (but not if user is typing in email field)
+    if (showEmailInput && !isValidEmail(email) && document.activeElement !== emailInput) {
+      nudgeForEmail(event);
+    }
+  }
+
   // --- Global "nudge" to require a valid email on any input ---
   function nudgeForEmail(event: Event) {
     // Only nudge if email is not valid
@@ -302,6 +318,12 @@
   }
 
   async function handleGlobalPointerDown(ev: PointerEvent) {
+    // Nudge for email if field is visible and email is invalid
+    if (showEmailInput && !isValidEmail(email)) {
+      nudgeForEmail(ev);
+      return;
+    }
+
     if (!showPasswordFields) return;
 
     if (hasPassword && !password && !clickIsInsidePasswordArea(ev)) {
@@ -344,6 +366,130 @@
     selectedNode = null;
   }
 
+  function handleDeleteRelationship() {
+    showDeleteRelationshipConfirmation = true;
+  }
+
+  async function confirmDeleteRelationship() {
+    if (!selectedNode?.id) return;
+    
+    deletingRelationship = true;
+    try {
+      // Extract the relationship index from the node ID
+      const relIndex = parseInt(selectedNode.id.replace('rel-', ''));
+      if (isNaN(relIndex) || !mapData[relIndex]) {
+        throw new Error('Invalid relationship');
+      }
+
+      const relationship = mapData[relIndex];
+      
+      const response = await fetch('/api/relationships', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          ownerEmail: email,
+          name: relationship.name,
+          description: relationship.description
+        })
+      });
+      
+      if (response.status >= 200 && response.status < 300) {
+        // Close modals and refresh data
+        showDeleteRelationshipConfirmation = false;
+        closeMapDrawer();
+        await checkForExistingMap();
+        showToast('Relationship deleted successfully');
+      } else {
+        try {
+          const errorData = await response.json();
+          alert(`Failed to delete relationship: ${errorData.error || 'Please try again.'}`);
+        } catch {
+          alert(`Failed to delete relationship. Status: ${response.status}`);
+        }
+      }
+    } catch (e) {
+      alert(`Failed to delete relationship: ${e instanceof Error ? e.message : 'Please try again.'}`);
+    } finally {
+      deletingRelationship = false;
+    }
+  }
+
+  function handleAddRelationship() {
+    relationshipText = '';
+    relationshipError = null;
+    showAddRelationshipDrawer = true;
+  }
+
+  function closeAddRelationshipDrawer() {
+    showAddRelationshipDrawer = false;
+    relationshipText = '';
+    relationshipError = null;
+  }
+
+  $: relationshipTextLimitReached = relationshipText.length >= 2000;
+
+  async function submitNewRelationship() {
+    relationshipError = null;
+    
+    if (!relationshipText.trim()) {
+      relationshipError = 'Please enter a description.';
+      return;
+    }
+    
+    relationshipLoading = true;
+    try {
+      // Call the AI model to analyze the relationship
+      const res = await fetch('/mapConnection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: relationshipText })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Request failed');
+      
+      const newRelationship = data;
+      
+      // Save to database
+      const res2 = await fetch('/api/relationships', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ownerEmail: email, ...newRelationship })
+      });
+      const saved = await res2.json();
+      if (!res2.ok) {
+        throw new Error(saved?.error || 'Failed to save relationship');
+      }
+      
+      // Reload map data
+      await checkForExistingMap();
+      
+      // Close the drawer
+      closeAddRelationshipDrawer();
+      
+      // Open the details drawer for the new relationship
+      setTimeout(() => {
+        const newIndex = mapData.length - 1;
+        const newNode: Node = {
+          id: `rel-${newIndex}`,
+          label: newRelationship.name,
+          name: newRelationship.name,
+          description: newRelationship.description,
+          status: newRelationship.status,
+          details: newRelationship.details,
+          x: 0,
+          y: 0
+        };
+        handleNodeSelect(newNode);
+      }, 300);
+      
+      showToast('Relationship added successfully!');
+    } catch (e: any) {
+      relationshipError = String(e?.message || e || 'Unknown error');
+    } finally {
+      relationshipLoading = false;
+    }
+  }
+
   onMount(() => {
     // Check for existing flash message(s)
     const flashMsg = localStorage.getItem('flash');
@@ -370,7 +516,7 @@
         ]).then(() => {
           // Auto-trigger experiment modal if user doesn't have both map and north star
           // We want to encourage users to create experiments even if they haven't created map/north star
-          if (isValidEmail(email) && (!mapData || !northStarData) && !experimentsData) {
+          if (isValidEmail(email) && (mapData.length === 0 || !northStarData) && !experimentsData) {
             // Short timeout to ensure UI is ready
             setTimeout(() => {
               showExperimentModal = true;
@@ -398,9 +544,11 @@
       }
     });
 
-    // Set up escape key handler
+    // Set up event listeners
+    document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('keydown', handleEscapeKey);
     return () => {
+      document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('keydown', handleEscapeKey);
     };
   });
@@ -424,18 +572,19 @@
   }
 
   function openMapDrawerFor(id: string) {
-    if (!mapData) return;
+    if (mapData.length === 0) return;
 
-    // Your diagram uses ids: 'you' and 'connection'
-    if (id === 'connection') {
+    // Find the relationship by ID
+    const relIndex = parseInt(id.replace('rel-', ''));
+    if (!isNaN(relIndex) && mapData[relIndex]) {
+      const rel = mapData[relIndex];
       selectedNode = {
-        id: 'connection',
-        label: mapData.name,
-        name: mapData.name,
-        desc: mapData.description,
-        description: mapData.description,
-        status: mapData.status,
-        details: mapData.details,
+        id: id,
+        label: rel.name,
+        name: rel.name,
+        description: rel.description,
+        status: rel.status,
+        details: rel.details,
         x: 0, y: 0 // not used by the drawer
       };
       showMapDrawer = true;
@@ -446,7 +595,7 @@
     debouncedCheckData();
   } else {
     if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
-    mapData = null;
+    mapData = [];
     northStarData = null;
     experimentsData = null;
   }
@@ -484,12 +633,13 @@
       });
       if (response.status >= 200 && response.status < 300) {
         email = '';
-        mapData = null;
+        mapData = [];
         northStarData = null;
         experimentsData = null;
         showDeleteConfirmation = false;
         localStorage.setItem('flash', 'Account deleted');
-        window.location.replace('/');      } else {
+        window.location.replace('/');
+      } else {
         try {
           const errorData = await response.json();
           alert(`Failed to delete account: ${errorData.error || 'Please try again.'}`);
@@ -693,7 +843,7 @@
     <!-- Relationship Map Tile -->
     <div 
       class="dashboard-tile" 
-      class:masked={isValidEmail(email) && !mapData} 
+      class:masked={isValidEmail(email) && mapData.length === 0} 
       class:clickable={mapTileClickable()}
       role={mapTileClickable() ? 'button' : undefined}
       tabindex={mapTileClickable() ? 0 : undefined}
@@ -704,11 +854,15 @@
     >
       <div class="tile-header">
         <h3>🗺️ Relationship Map</h3>
-        {#if isValidEmail(email) && !mapData}
-          {#if $user && $user.authenticated}
-            <button class="lfg-button" on:click|stopPropagation={() => goto('/mapConnection')} aria-label="Create your relationship map">LFG</button>
-          {:else}
-            <button class="lock-icon" on:click|stopPropagation={() => { checkPasswordStatus(); emailInput?.focus(); }} title="Please enter your password to unlock" aria-label="Locked - enter password to unlock">🔒</button>
+        {#if isValidEmail(email)}
+          {#if mapData.length === 0}
+            {#if $user && $user.authenticated}
+              <button class="lfg-button" on:click|stopPropagation={() => goto('/mapConnection')} aria-label="Create your relationship map">LFG</button>
+            {:else}
+              <button class="lock-icon" on:click|stopPropagation={() => { checkPasswordStatus(); emailInput?.focus(); }} title="Please enter your password to unlock" aria-label="Locked - enter password to unlock">🔒</button>
+            {/if}
+          {:else if $user && $user.authenticated}
+            <button class="lfg-button" on:click|stopPropagation={handleAddRelationship} aria-label="Add new relationship">Add New</button>
           {/if}
         {/if}    
       </div>
@@ -717,14 +871,40 @@
         <div class="tile-preview">
           {#if loadingMap}
             <div class="loading-state">Loading...</div>
-          {:else if mapData}
-            <div class="diagram-container">
+          {:else if mapData.length > 0}
+            <div class="map-diagram-container">
               <Diagram
                 nodes={[
-                  { id: 'you', label: 'You', name: 'You', description: '', status: undefined, details: {}, x: 50, y: 50, width: 300, height: 225 },
-                  { id: 'connection', label: mapData.name, desc: mapData.description, name: mapData.name, description: mapData.description, status: mapData.status, details: mapData.details, x: 450, y: 50, width: 300, height: 225 }
+                  { id: 'you', label: 'You', name: 'You', description: '', status: undefined, details: {}, x: 30, y: mapData.length === 1 ? 50 : 100, width: 180, height: 100 },
+                  ...mapData.map((rel, index) => {
+                    const nodeWidth = 180;
+                    const nodeHeight = 100;
+                    const verticalSpacing = 130; // spacing between stacked nodes
+                    const startX = 350; // x position for all relationship nodes (single column)
+                    // Center single node, otherwise start from top
+                    const startY = mapData.length === 1 ? 50 : 10;
+                    
+                    return {
+                      id: `rel-${index}`,
+                      label: rel.name,
+                      desc: rel.description,
+                      name: rel.name,
+                      description: rel.description,
+                      status: rel.status,
+                      details: rel.details,
+                      x: startX,
+                      y: startY + index * verticalSpacing,
+                      width: nodeWidth,
+                      height: nodeHeight
+                    };
+                  })
                 ]}
-                edges={[{ id: 'main-connection', source: 'you', target: 'connection', status: mapData.status }]}
+                edges={mapData.map((rel, index) => ({
+                  id: `edge-${index}`,
+                  source: 'you',
+                  target: `rel-${index}`,
+                  status: rel.status
+                }))}
                 on:nodeSelect={(e) => handleNodeSelect(e.detail)}
               />
               {#if showMapDrawer && selectedNode}
@@ -756,6 +936,66 @@
                         {#if selectedNode.details['→']}<li>→ | {selectedNode.details['→']}</li>{/if}
                       </ul>
                     {/if}
+                    
+                    <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--input-border);">
+                      <button
+                        on:click={handleDeleteRelationship}
+                        class="delete-btn"
+                        aria-label="Delete relationship"
+                        title="Delete this relationship"
+                        style="width: 100%; padding: 0.75rem; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;"
+                      >
+                        Delete Relationship
+                      </button>
+                    </div>
+                  </div>
+                </aside>
+              {/if}
+              
+              {#if showAddRelationshipDrawer}
+                <div class="map-drawer-backdrop" on:click={closeAddRelationshipDrawer}></div>
+                <aside
+                  class="map-drawer"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Add new relationship"
+                  tabindex="-1"
+                  on:keydown={(e) => e.key === 'Escape' && closeAddRelationshipDrawer()}
+                >
+                  <header class="map-drawer-header">
+                    <h4>Add New Relationship</h4>
+                    <button class="close-btn" on:click={closeAddRelationshipDrawer} aria-label="Close">×</button>
+                  </header>
+                  <div class="map-drawer-body">
+                    <div class="input-group">
+                      {#if relationshipText}
+                        <label for="relationship-text" class="floating-label">Describe an important person and your relationship with them. Include their name, what's going well, what's challenging, and what you hope for.</label>
+                      {/if}
+                      <textarea
+                        id="relationship-text"
+                        bind:value={relationshipText}
+                        placeholder={relationshipText ? "" : "Describe an important person and your relationship with them. Include their name, what's going well, what's challenging, and what you hope for."}
+                        rows="6"
+                        maxlength="2000"
+                        class="relationship-textarea"
+                      ></textarea>
+                      
+                      {#if relationshipTextLimitReached}
+                        <p class="error-text">Max 2000 characters</p>
+                      {/if}
+                    </div>
+
+                    {#if relationshipError}
+                      <p class="error-text">{relationshipError}</p>
+                    {/if}
+
+                    <button 
+                      class="submit-button" 
+                      on:click={submitNewRelationship} 
+                      disabled={relationshipLoading || !relationshipText.trim()}
+                    >
+                      {relationshipLoading ? 'Analyzing...' : 'Add Relationship'}
+                    </button>
                   </div>
                 </aside>
               {/if}
@@ -989,6 +1229,21 @@
   </div>
 {/if}
 
+<!-- Delete Relationship Confirmation Modal -->
+{#if showDeleteRelationshipConfirmation}
+  <div class="modal-backdrop" on:click={() => (showDeleteRelationshipConfirmation = false)} on:keydown={(e) => e.key === 'Escape' && (showDeleteRelationshipConfirmation = false)} role="dialog" aria-modal="true" tabindex="-1">
+    <div class="modal" role="document" on:click|stopPropagation>
+      <h3>Delete Relationship</h3>
+      <p>Are you sure you want to delete this relationship?</p>
+      <p><strong>This action cannot be undone.</strong></p>
+      <div class="modal-buttons">
+        <button class="cancel-btn" on:click={() => (showDeleteRelationshipConfirmation = false)} disabled={deletingRelationship}>Cancel</button>
+        <button class="confirm-delete-btn" on:click={confirmDeleteRelationship} disabled={deletingRelationship}>{deletingRelationship ? 'Deleting...' : 'Yes, Delete Relationship'}</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <!-- Experiment Modal -->
 {#if showExperimentModal}
   <div class="modal-backdrop" on:click={() => (showExperimentModal = false)} on:keydown={(e) => e.key === 'Escape' && (showExperimentModal = false)} role="dialog" aria-modal="true" tabindex="-1">
@@ -1107,7 +1362,7 @@
   .dashboard-header input { margin-top: 0.5rem; max-width: 300px; }
   .dashboard-header input.error { border-color: #ff4444; box-shadow: 0 0 0 2px rgba(255,68,68,.2); }
   .error-message {
-    color: var(--error);
+    color: #ff4444;
     font-size: 0.8em;
     margin-top: 0.2em;
   }
@@ -1123,8 +1378,18 @@
     padding: 1rem;
     transition: all .2s ease;
     position: relative;
-    max-width: 100%;          /* never exceed grid column */
-    overflow: hidden;         /* safety net for any inner spill */
+    max-width: 100%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 400px;
+  }
+  
+  .tile-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
   }
   .dashboard-tile:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.3); border: 3px solid white; }
   .dashboard-tile.masked::after {
@@ -1156,19 +1421,30 @@
   .tile-description { color: var(--text); margin-bottom: 1rem; font-size: .9rem; font-style: italic; text-align: center; }
 
   .tile-preview {
-    min-height: 280px; display:flex; align-items:center; justify-content:center;
-    width: 100%; max-width: 100%;
-    overflow-x: visible;
+    display: flex; 
+    flex-direction: column; 
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
   }
+  
   .loading-state { display:flex; align-items:center; justify-content:center; padding: 2rem; color: var(--text); font-style: italic; }
 
   /* Diagram area must scale down to tile width */
-  .diagram-container { width: 100%; max-width: 100%; overflow: hidden; }
-  .diagram-container :global(svg) { display: block; max-width: 100%; height: auto; }
+  .map-diagram-container { 
+    display: flex;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    flex: 1;
+    min-height: 280px;
+    position: relative;
+  }
 
   /* Diagram typography */
-  .diagram-container :global(.title) { font-size: 24px !important; font-weight: 600 !important; }
-  .diagram-container :global(.emoji) { font-size: 24px !important; }
+  .map-diagram-container :global(.title) { font-size: 24px !important; font-weight: 600 !important; }
+  .map-diagram-container :global(.emoji) { font-size: 24px !important; }
 
   /* Relationship Map Placeholder */
   .placeholder-diagram { display:flex; align-items:center; justify-content:center; padding: .5rem; gap: .5rem; }
@@ -1588,4 +1864,64 @@
   animation: fadein 0.3s ease;
   }
   @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+
+  /* Relationship Input Styles */
+  .relationship-textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    background: var(--input-bg);
+    color: var(--text);
+    font-size: 1rem;
+    font-family: inherit;
+    resize: vertical;
+    transition: border-color 0.2s ease;
+  }
+
+  .relationship-textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  }
+
+  .input-group {
+    margin-bottom: 1rem;
+  }
+
+  .floating-label {
+    display: block;
+    font-size: 0.9rem;
+    color: var(--text);
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+  }
+
+  .error-text {
+    color: var(--error);
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+  }
+
+  .submit-button {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--button-bg);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+
+  .submit-button:hover:not(:disabled) {
+    background: var(--button-hover);
+  }
+
+  .submit-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 </style>

@@ -64,3 +64,37 @@ export async function GET({ url, cookies }) {
 
   return json(out);
 }
+
+// DELETE /api/relationships  { ownerEmail, name, description }
+export async function DELETE({ request, cookies }) {
+  const body = await request.json();
+
+  const ownerEmail = body?.ownerEmail?.trim().toLowerCase();
+  const { name, description } = body ?? {};
+
+  if (!ownerEmail || !name || !description) {
+    throw error(400, 'Missing required fields: ownerEmail, name, and description');
+  }
+  
+  // Validate user has access to this email
+  await validateUserAccess(cookies, ownerEmail);
+
+  // Find and delete the relationship
+  const relationship = await prisma.relationship.findFirst({
+    where: {
+      ownerEmail,
+      name,
+      description
+    }
+  });
+
+  if (!relationship) {
+    throw error(404, 'Relationship not found');
+  }
+
+  await prisma.relationship.delete({
+    where: { id: relationship.id }
+  });
+
+  return json({ success: true, message: 'Relationship deleted successfully' });
+}
