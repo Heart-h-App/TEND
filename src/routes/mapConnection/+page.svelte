@@ -307,7 +307,7 @@
           <div style="margin-top: auto; padding-top: 1.5rem; border-top: 1px solid var(--input-border);">
             <button
               on:click={handleDeleteRelationship}
-              style="width: 100%; padding: 0.75rem; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;"
+              style="width: 100%; padding: 0.75rem; background-color: var(--brand-primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;"
               aria-label="Delete relationship"
               title="Delete this relationship"
             >

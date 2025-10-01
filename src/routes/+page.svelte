@@ -66,6 +66,11 @@
   let showDeleteRelationshipConfirmation = false;
   let deletingRelationship = false;
 
+  // Delete experiment state
+  let showDeleteExperimentConfirmation = false;
+  let deletingExperiment = false;
+  let experimentToDelete: any = null;
+
   // debounce
   let debounceTimer: NodeJS.Timeout | null = null;
 
@@ -280,7 +285,11 @@
   
   function handleEscapeKey(event: KeyboardEvent) {
     if (event.key !== 'Escape') return;
-    if (showExperimentModal) {
+    if (showDeleteRelationshipConfirmation) {
+      showDeleteRelationshipConfirmation = false;
+    } else if (showDeleteExperimentConfirmation) {
+      showDeleteExperimentConfirmation = false;
+    } else if (showExperimentModal) {
       showExperimentModal = false;
       experimentText = '';
       experimentError = null;
@@ -622,6 +631,46 @@
     showDeleteConfirmation = true;
   }
 
+  function handleDeleteExperiment(experiment: any) {
+    experimentToDelete = experiment;
+    showDeleteExperimentConfirmation = true;
+  }
+
+  async function confirmDeleteExperiment() {
+    if (!experimentToDelete?.id) return;
+    
+    deletingExperiment = true;
+    try {
+      const response = await fetch('/api/experiments', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          experimentId: experimentToDelete.id,
+          ownerEmail: email
+        })
+      });
+      
+      if (response.status >= 200 && response.status < 300) {
+        // Close modal and refresh data
+        showDeleteExperimentConfirmation = false;
+        experimentToDelete = null;
+        await checkForExistingExperiments();
+        showToast('Experiment deleted successfully');
+      } else {
+        try {
+          const errorData = await response.json();
+          alert(`Failed to delete experiment: ${errorData.error || 'Please try again.'}`);
+        } catch {
+          alert(`Failed to delete experiment. Status: ${response.status}`);
+        }
+      }
+    } catch (e) {
+      alert(`Failed to delete experiment: ${e instanceof Error ? e.message : 'Please try again.'}`);
+    } finally {
+      deletingExperiment = false;
+    }
+  }
+
   async function confirmDelete() {
     if (!isValidEmail(email)) return;
     deletingAccount = true;
@@ -943,7 +992,7 @@
                         class="delete-btn"
                         aria-label="Delete relationship"
                         title="Delete this relationship"
-                        style="width: 100%; padding: 0.75rem; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;"
+                        style="width: 100%; padding: 0.75rem; background-color: var(--brand-primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;"
                       >
                         Delete Relationship
                       </button>
@@ -1182,6 +1231,21 @@
                           </td>
                         {/each}
                       </tr>
+                      <tr>
+                        <td class="step-label"></td>
+                        {#each experimentsData as experiment}
+                          <td class="experiment-cell rating-cell" on:click|stopPropagation>
+                            <button
+                              on:click={() => handleDeleteExperiment(experiment)}
+                              style="width: 100%; padding: 0.5rem; background-color: var(--brand-primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.85rem;"
+                              aria-label="Delete experiment"
+                              title="Delete this experiment"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        {/each}
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -1239,6 +1303,21 @@
       <div class="modal-buttons">
         <button class="cancel-btn" on:click={() => (showDeleteRelationshipConfirmation = false)} disabled={deletingRelationship}>Cancel</button>
         <button class="confirm-delete-btn" on:click={confirmDeleteRelationship} disabled={deletingRelationship}>{deletingRelationship ? 'Deleting...' : 'Yes, Delete Relationship'}</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Delete Experiment Confirmation Modal -->
+{#if showDeleteExperimentConfirmation}
+  <div class="modal-backdrop" on:click={() => (showDeleteExperimentConfirmation = false)} on:keydown={(e) => e.key === 'Escape' && (showDeleteExperimentConfirmation = false)} role="dialog" aria-modal="true" tabindex="-1">
+    <div class="modal" role="document" on:click|stopPropagation>
+      <h3>Delete Experiment</h3>
+      <p>Are you sure you want to delete this experiment?</p>
+      <p><strong>This action cannot be undone.</strong></p>
+      <div class="modal-buttons">
+        <button class="cancel-btn" on:click={() => (showDeleteExperimentConfirmation = false)} disabled={deletingExperiment}>Cancel</button>
+        <button class="confirm-delete-btn" on:click={confirmDeleteExperiment} disabled={deletingExperiment}>{deletingExperiment ? 'Deleting...' : 'Yes, Delete Experiment'}</button>
       </div>
     </div>
   </div>
