@@ -56,3 +56,43 @@ export async function GET({ url, cookies }) {
   // Return array format to match your frontend expectation (data.length > 0)
   return json(northStar ? [northStar] : []);
 }
+
+// PATCH /api/northStar  { ownerEmail, haiku?, north?, east?, south?, west? }
+export async function PATCH({ request, cookies }) {
+  const body = await request.json();
+
+  const ownerEmail = body?.ownerEmail?.trim().toLowerCase();
+  const { haiku, north, east, south, west } = body ?? {};
+
+  if (!ownerEmail) {
+    throw error(400, 'Missing required field: ownerEmail');
+  }
+  
+  // Validate user has access to this email
+  await validateUserAccess(cookies, ownerEmail);
+
+  // Find the north star
+  const northStar = await prisma.northStar.findUnique({
+    where: { ownerEmail }
+  });
+
+  if (!northStar) {
+    throw error(404, 'North Star not found');
+  }
+
+  // Build update data
+  const updateData: any = { metaVersion: { increment: 1 } };
+  if (haiku !== undefined) updateData.haiku = haiku;
+  if (north !== undefined) updateData.north = north;
+  if (east !== undefined) updateData.east = east;
+  if (south !== undefined) updateData.south = south;
+  if (west !== undefined) updateData.west = west;
+
+  // Update the north star
+  const updated = await prisma.northStar.update({
+    where: { ownerEmail },
+    data: updateData
+  });
+
+  return json(updated);
+}

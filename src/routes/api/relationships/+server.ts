@@ -98,3 +98,58 @@ export async function DELETE({ request, cookies }) {
 
   return json({ success: true, message: 'Relationship deleted successfully' });
 }
+
+// PATCH /api/relationships  { ownerEmail, oldName, oldDescription, name?, description?, status?, details? }
+export async function PATCH({ request, cookies }) {
+  const body = await request.json();
+
+  const ownerEmail = body?.ownerEmail?.trim().toLowerCase();
+  const { oldName, oldDescription, name, description, status, details } = body ?? {};
+
+  if (!ownerEmail || !oldName || !oldDescription) {
+    throw error(400, 'Missing required fields: ownerEmail, oldName, and oldDescription');
+  }
+  
+  // Validate user has access to this email
+  await validateUserAccess(cookies, ownerEmail);
+
+  // Find the relationship
+  const relationship = await prisma.relationship.findFirst({
+    where: {
+      ownerEmail,
+      name: oldName,
+      description: oldDescription
+    }
+  });
+
+  if (!relationship) {
+    throw error(404, 'Relationship not found');
+  }
+
+  // Build update data
+  const updateData: any = {};
+  if (name !== undefined) updateData.name = name;
+  if (description !== undefined) updateData.description = description;
+  if (status !== undefined) updateData.status = toEnum(status);
+  if (details !== undefined) updateData.details = details;
+
+  // Update the relationship
+  const updated = await prisma.relationship.update({
+    where: { id: relationship.id },
+    data: updateData
+  });
+
+  // Map enum back to UI string
+  const result = {
+    id: updated.id,
+    ownerEmail: updated.ownerEmail,
+    name: updated.name,
+    description: updated.description,
+    status: fromEnum(updated.status),
+    details: updated.details,
+    createdAt: updated.createdAt,
+    updatedAt: updated.updatedAt
+  };
+
+  return json(result);
+}

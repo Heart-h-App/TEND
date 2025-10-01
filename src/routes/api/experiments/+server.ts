@@ -107,3 +107,53 @@ export const DELETE: RequestHandler = async ({ request, cookies }) => {
     return json({ error: 'Failed to delete experiment' }, { status: 500 });
   }
 };
+
+export const PATCH: RequestHandler = async ({ request, cookies }) => {
+  try {
+    const body = await request.json();
+    const { experimentId, ownerEmail, challenge, hypothesis, intervention, measure, learnings, rating } = body;
+
+    if (!experimentId || !ownerEmail) {
+      return json({ error: 'Missing required fields: experimentId and ownerEmail' }, { status: 400 });
+    }
+    
+    try {
+      // Validate user has access to this email
+      await validateUserAccess(cookies, ownerEmail);
+    } catch (error: any) {
+      return json({ error: error.message || 'Authentication failed' }, { status: error.status || 401 });
+    }
+
+    // Verify the experiment belongs to the user
+    const experiment = await prisma.experiment.findUnique({
+      where: { id: experimentId }
+    });
+
+    if (!experiment) {
+      return json({ error: 'Experiment not found' }, { status: 404 });
+    }
+
+    if (experiment.ownerEmail !== ownerEmail) {
+      return json({ error: 'Unauthorized to update this experiment' }, { status: 403 });
+    }
+
+    // Build update data
+    const updateData: any = {};
+    if (challenge !== undefined) updateData.challenge = challenge;
+    if (hypothesis !== undefined) updateData.hypothesis = hypothesis;
+    if (intervention !== undefined) updateData.intervention = intervention;
+    if (measure !== undefined) updateData.measure = measure;
+    if (learnings !== undefined) updateData.learnings = learnings;
+    if (rating !== undefined) updateData.rating = rating;
+
+    const updated = await prisma.experiment.update({
+      where: { id: experimentId },
+      data: updateData
+    });
+
+    return json(updated);
+  } catch (error) {
+    console.error('Error updating experiment:', error);
+    return json({ error: 'Failed to update experiment' }, { status: 500 });
+  }
+};

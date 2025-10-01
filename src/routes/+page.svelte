@@ -363,16 +363,56 @@
   let showMapDrawer = false;
   let selectedNode: Node | null = null;
 
+  // Edit state for progressive editing (relationships)
+  let editingField: string | null = null;
+  let editValue: string = '';
+  let originalValue: string = '';
+  let savingField: string | null = null;
+  let savedField: string | null = null;
+  let saveError: string | null = null;
+  let saveDebounceTimer: NodeJS.Timeout | null = null;
+
+  // Edit state for North Star
+  let editingNorthStarField: string | null = null;
+  let editNorthStarValue: any = '';
+  let originalNorthStarValue: any = '';
+  let savingNorthStarField: string | null = null;
+  let savedNorthStarField: string | null = null;
+  let saveNorthStarError: string | null = null;
+  let saveNorthStarDebounceTimer: NodeJS.Timeout | null = null;
+
+  // Edit state for Experiments
+  let editingExperimentField: string | null = null; // Format: "experimentId-fieldName"
+  let editExperimentValue: string = '';
+  let originalExperimentValue: string = '';
+  let savingExperimentField: string | null = null;
+  let savedExperimentField: string | null = null;
+  let saveExperimentError: string | null = null;
+  let saveExperimentDebounceTimer: NodeJS.Timeout | null = null;
+
   function handleNodeSelect(node: Node) {
     // ignore the "You" node (open only for the connection)
     if (node?.id === 'you') return;
     selectedNode = node;
     showMapDrawer = true;
+    // Reset edit state
+    editingField = null;
+    editValue = '';
+    originalValue = '';
+    savingField = null;
+    savedField = null;
+    saveError = null;
   }
 
   function closeMapDrawer() {
     showMapDrawer = false;
     selectedNode = null;
+    editingField = null;
+    editValue = '';
+    originalValue = '';
+    savingField = null;
+    savedField = null;
+    saveError = null;
   }
 
   function handleDeleteRelationship() {
@@ -420,6 +460,323 @@
       alert(`Failed to delete relationship: ${e instanceof Error ? e.message : 'Please try again.'}`);
     } finally {
       deletingRelationship = false;
+    }
+  }
+
+  function startEditField(field: string, currentValue: string) {
+    editingField = field;
+    editValue = currentValue;
+    originalValue = currentValue;
+    savedField = null;
+    saveError = null;
+  }
+
+  function cancelEditField() {
+    editingField = null;
+    editValue = '';
+    originalValue = '';
+    saveError = null;
+    if (saveDebounceTimer) {
+      clearTimeout(saveDebounceTimer);
+      saveDebounceTimer = null;
+    }
+  }
+
+  async function saveFieldChange(field: string, value: string) {
+    if (!selectedNode?.id || value === originalValue) {
+      cancelEditField();
+      return;
+    }
+
+    const relIndex = parseInt(selectedNode.id.replace('rel-', ''));
+    if (isNaN(relIndex) || !mapData[relIndex]) {
+      saveError = 'Invalid relationship';
+      return;
+    }
+
+    const relationship = mapData[relIndex];
+    savingField = field;
+    saveError = null;
+
+    try {
+      const updateData: any = {
+        ownerEmail: email,
+        oldName: relationship.name,
+        oldDescription: relationship.description
+      };
+
+      if (field === 'name') {
+        updateData.name = value;
+      } else if (field === 'description') {
+        updateData.description = value;
+      } else if (field === 'status') {
+        updateData.status = value;
+      } else if (field.startsWith('detail-')) {
+        const detailKey = field.replace('detail-', '');
+        updateData.details = { ...relationship.details, [detailKey]: value };
+      }
+
+      const response = await fetch('/api/relationships', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+      });
+
+      if (response.ok) {
+        const updated = await response.json();
+        
+        // Update local data
+        await checkForExistingMap();
+        
+        // Update selectedNode with new data
+        if (selectedNode) {
+          selectedNode = {
+            ...selectedNode,
+            name: updated.name,
+            description: updated.description,
+            status: updated.status,
+            details: updated.details
+          };
+        }
+
+        // Show success feedback
+        savedField = field;
+        setTimeout(() => {
+          savedField = null;
+        }, 2000);
+        
+        editingField = null;
+        editValue = '';
+        originalValue = '';
+      } else {
+        const errorData = await response.json();
+        saveError = errorData.error || 'Failed to save';
+      }
+    } catch (e) {
+      saveError = e instanceof Error ? e.message : 'Failed to save';
+    } finally {
+      savingField = null;
+    }
+  }
+
+  function handleFieldBlur(field: string, value: string) {
+    // Debounce the save to allow clicking on other UI elements
+    if (saveDebounceTimer) {
+      clearTimeout(saveDebounceTimer);
+    }
+    saveDebounceTimer = setTimeout(() => {
+      saveFieldChange(field, value);
+    }, 500);
+  }
+
+  function handleFieldKeydown(e: KeyboardEvent, field: string, value: string) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEditField();
+    } else if (e.key === 'Enter' && field !== 'description' && !field.startsWith('detail-')) {
+      e.preventDefault();
+      saveFieldChange(field, value);
+    }
+  }
+
+  // North Star edit functions
+  function startEditNorthStarField(field: string, currentValue: any) {
+    editingNorthStarField = field;
+    
+    // For direction fields, create a deep copy of the array for editing
+    if (field.startsWith('direction-') && Array.isArray(currentValue)) {
+      // Create a deep copy so we can edit without mutating the original
+      editNorthStarValue = currentValue.map(item => ({ emoji: item.emoji, phrase: item.phrase }));
+      originalNorthStarValue = currentValue;
+    } else {
+      editNorthStarValue = currentValue;
+      originalNorthStarValue = currentValue;
+    }
+    
+    savedNorthStarField = null;
+    saveNorthStarError = null;
+  }
+
+  function cancelEditNorthStarField() {
+    editingNorthStarField = null;
+    editNorthStarValue = '';
+    originalNorthStarValue = '';
+    saveNorthStarError = null;
+    if (saveNorthStarDebounceTimer) {
+      clearTimeout(saveNorthStarDebounceTimer);
+      saveNorthStarDebounceTimer = null;
+    }
+  }
+
+  async function saveNorthStarFieldChange(field: string, value: any) {
+    if (!northStarData) {
+      cancelEditNorthStarField();
+      return;
+    }
+
+    // For directions, compare the edited array with the original
+    if (field.startsWith('direction-')) {
+      // Compare by stringifying to check if anything changed
+      if (JSON.stringify(value) === JSON.stringify(originalNorthStarValue)) {
+        cancelEditNorthStarField();
+        return;
+      }
+    } else {
+      // For haiku, simple string comparison
+      if (value === originalNorthStarValue) {
+        cancelEditNorthStarField();
+        return;
+      }
+    }
+
+    savingNorthStarField = field;
+    saveNorthStarError = null;
+
+    try {
+      const updateData: any = {
+        ownerEmail: email
+      };
+
+      if (field === 'haiku') {
+        updateData.haiku = value;
+      } else if (field.startsWith('direction-')) {
+        // field format: "direction-north", "direction-east", etc.
+        const direction = field.replace('direction-', '');
+        // Value is already the array of {emoji, phrase} objects
+        updateData[direction] = value;
+      }
+
+      const response = await fetch('/api/northStar', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+      });
+
+      if (response.ok) {
+        const updated = await response.json();
+        northStarData = updated;
+
+        // Show success feedback
+        savedNorthStarField = field;
+        setTimeout(() => {
+          savedNorthStarField = null;
+        }, 2000);
+        
+        editingNorthStarField = null;
+        editNorthStarValue = '';
+        originalNorthStarValue = '';
+      } else {
+        const errorData = await response.json();
+        saveNorthStarError = errorData.error || 'Failed to save';
+      }
+    } catch (e) {
+      saveNorthStarError = e instanceof Error ? e.message : 'Failed to save';
+    } finally {
+      savingNorthStarField = null;
+    }
+  }
+
+  function handleNorthStarFieldBlur(field: string, value: any) {
+    if (saveNorthStarDebounceTimer) {
+      clearTimeout(saveNorthStarDebounceTimer);
+    }
+    saveNorthStarDebounceTimer = setTimeout(() => {
+      saveNorthStarFieldChange(field, value);
+    }, 500);
+  }
+
+  function handleNorthStarFieldKeydown(e: KeyboardEvent, field: string, value: any) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEditNorthStarField();
+    }
+  }
+
+  // Experiment edit functions
+  function startEditExperimentField(experimentId: string, field: string, currentValue: string) {
+    editingExperimentField = `${experimentId}-${field}`;
+    editExperimentValue = currentValue;
+    originalExperimentValue = currentValue;
+    savedExperimentField = null;
+    saveExperimentError = null;
+  }
+
+  function cancelEditExperimentField() {
+    editingExperimentField = null;
+    editExperimentValue = '';
+    originalExperimentValue = '';
+    saveExperimentError = null;
+    if (saveExperimentDebounceTimer) {
+      clearTimeout(saveExperimentDebounceTimer);
+      saveExperimentDebounceTimer = null;
+    }
+  }
+
+  async function saveExperimentFieldChange(experimentId: string, field: string, value: string) {
+    if (!experimentsData || value === originalExperimentValue) {
+      cancelEditExperimentField();
+      return;
+    }
+
+    const fieldKey = `${experimentId}-${field}`;
+    savingExperimentField = fieldKey;
+    saveExperimentError = null;
+
+    try {
+      const updateData: any = {
+        experimentId,
+        ownerEmail: email,
+        [field]: value
+      };
+
+      const response = await fetch('/api/experiments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+      });
+
+      if (response.ok) {
+        const updated = await response.json();
+        
+        // Update local data
+        await checkForExistingExperiments();
+
+        // Show success feedback
+        savedExperimentField = fieldKey;
+        setTimeout(() => {
+          savedExperimentField = null;
+        }, 2000);
+        
+        editingExperimentField = null;
+        editExperimentValue = '';
+        originalExperimentValue = '';
+      } else {
+        const errorData = await response.json();
+        saveExperimentError = errorData.error || 'Failed to save';
+      }
+    } catch (e) {
+      saveExperimentError = e instanceof Error ? e.message : 'Failed to save';
+    } finally {
+      savingExperimentField = null;
+    }
+  }
+
+  function handleExperimentFieldBlur(experimentId: string, field: string, value: string) {
+    if (saveExperimentDebounceTimer) {
+      clearTimeout(saveExperimentDebounceTimer);
+    }
+    saveExperimentDebounceTimer = setTimeout(() => {
+      saveExperimentFieldChange(experimentId, field, value);
+    }, 500);
+  }
+
+  function handleExperimentFieldKeydown(e: KeyboardEvent, experimentId: string, field: string, value: string) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEditExperimentField();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      saveExperimentFieldChange(experimentId, field, value);
     }
   }
 
@@ -964,26 +1321,226 @@
                   aria-modal="true"
                   aria-label="Connection details"
                   tabindex="-1"
-                  on:keydown={(e) => e.key === 'Escape' && closeMapDrawer()}
+                  on:keydown={(e) => {
+                    if (e.key === 'Escape') {
+                      if (editingField) {
+                        cancelEditField();
+                      } else {
+                        closeMapDrawer();
+                      }
+                    }
+                  }}
                 >
                   <header class="map-drawer-header">
                     <h4>{selectedNode.name ?? selectedNode.label}</h4>
                     <button class="close-btn" on:click={closeMapDrawer} aria-label="Close">×</button>
                   </header>
-                  <div class="map-drawer-body">
+                  <div class="map-drawer-body" on:click={(e) => {
+                    // Click outside editing fields saves changes
+                    if (editingField && e.target === e.currentTarget) {
+                      const field = editingField;
+                      const value = editValue;
+                      saveFieldChange(field, value);
+                    }
+                  }}>
+                    <!-- Name Field (in header, but we can still make it editable via status) -->
+                    
+                    <!-- Status Field -->
                     {#if selectedNode.status}
-                      <div class="row"><strong>Status:</strong> {selectedNode.status}</div>
+                      {#if editingField === 'status'}
+                        <div class="row editing-row">
+                          <strong>Status:</strong>
+                          <select
+                            class="edit-select-inline"
+                            bind:value={editValue}
+                            on:blur={() => handleFieldBlur('status', editValue)}
+                            on:change={() => saveFieldChange('status', editValue)}
+                            on:keydown={(e) => handleFieldKeydown(e, 'status', editValue)}
+                            aria-label="Edit status"
+                          >
+                            <option value="on track">on track</option>
+                            <option value="strained">strained</option>
+                          </select>
+                          {#if savingField === 'status'}
+                            <span class="status-indicator">⏳</span>
+                          {:else if savedField === 'status'}
+                            <span class="status-indicator saved">✓</span>
+                          {/if}
+                        </div>
+                      {:else}
+                        <div 
+                          class="row editable-row"
+                          class:saved={savedField === 'status'}
+                          role="button"
+                          tabindex="0"
+                          on:click={() => startEditField('status', selectedNode?.status || 'on track')}
+                          on:keydown={(e) => e.key === 'Enter' && startEditField('status', selectedNode?.status || 'on track')}
+                          aria-label="Click to edit status"
+                        >
+                          <strong>Status:</strong> {selectedNode.status}
+                          <span class="edit-icon-inline">✏️</span>
+                          {#if savedField === 'status'}
+                            <span class="status-indicator saved">✓</span>
+                          {/if}
+                        </div>
+                      {/if}
                     {/if}
+                    
+                    <!-- Description/Vibe Field -->
                     {#if selectedNode.description}
-                      <div class="row"><strong>Vibe:</strong> {selectedNode.description}</div>
+                      {#if editingField === 'description'}
+                        <div class="row editing-row">
+                          <strong>Vibe:</strong>
+                          <textarea
+                            class="edit-textarea-inline"
+                            bind:value={editValue}
+                            on:blur={() => handleFieldBlur('description', editValue)}
+                            on:keydown={(e) => handleFieldKeydown(e, 'description', editValue)}
+                            rows="3"
+                            aria-label="Edit description"
+                          ></textarea>
+                          {#if savingField === 'description'}
+                            <span class="status-indicator">⏳</span>
+                          {:else if savedField === 'description'}
+                            <span class="status-indicator saved">✓</span>
+                          {/if}
+                        </div>
+                      {:else}
+                        <div 
+                          class="row editable-row"
+                          class:saved={savedField === 'description'}
+                          role="button"
+                          tabindex="0"
+                          on:click={() => startEditField('description', selectedNode?.description || '')}
+                          on:keydown={(e) => e.key === 'Enter' && startEditField('description', selectedNode?.description || '')}
+                          aria-label="Click to edit description"
+                        >
+                          <strong>Vibe:</strong> {selectedNode.description}
+                          <span class="edit-icon-inline">✏️</span>
+                          {#if savedField === 'description'}
+                            <span class="status-indicator saved">✓</span>
+                          {/if}
+                        </div>
+                      {/if}
                     {/if}
+                    
+                    <!-- Details Fields -->
                     {#if selectedNode.details}
                       <div class="row"><strong>Details:</strong></div>
                       <ul class="details">
-                        {#if selectedNode.details['+']}<li>+ | {selectedNode.details['+']}</li>{/if}
-                        {#if selectedNode.details['∆']}<li>∆ | {selectedNode.details['∆']}</li>{/if}
-                        {#if selectedNode.details['→']}<li>→ | {selectedNode.details['→']}</li>{/if}
+                        {#if selectedNode.details['+']}
+                          {#if editingField === 'detail-+'}
+                            <li class="editing-detail">
+                              <span class="detail-symbol">+</span>
+                              <textarea
+                                class="edit-textarea-inline"
+                                bind:value={editValue}
+                                on:blur={() => handleFieldBlur('detail-+', editValue)}
+                                on:keydown={(e) => handleFieldKeydown(e, 'detail-+', editValue)}
+                                rows="2"
+                                aria-label="Edit positive detail"
+                              ></textarea>
+                              {#if savingField === 'detail-+'}
+                                <span class="status-indicator">⏳</span>
+                              {:else if savedField === 'detail-+'}
+                                <span class="status-indicator saved">✓</span>
+                              {/if}
+                            </li>
+                          {:else}
+                            <li 
+                              class="editable-detail"
+                              class:saved={savedField === 'detail-+'}
+                              role="button"
+                              tabindex="0"
+                              on:click={() => startEditField('detail-+', selectedNode?.details?.['+'] || '')}
+                              on:keydown={(e) => e.key === 'Enter' && startEditField('detail-+', selectedNode?.details?.['+'] || '')}
+                              aria-label="Click to edit positive detail"
+                            >
+                              + | {selectedNode.details['+']}
+                              <span class="edit-icon-inline">✏️</span>
+                              {#if savedField === 'detail-+'}
+                                <span class="status-indicator saved">✓</span>
+                              {/if}
+                            </li>
+                          {/if}
+                        {/if}
+                        {#if selectedNode.details['∆']}
+                          {#if editingField === 'detail-∆'}
+                            <li class="editing-detail">
+                              <span class="detail-symbol">∆</span>
+                              <textarea
+                                class="edit-textarea-inline"
+                                bind:value={editValue}
+                                on:blur={() => handleFieldBlur('detail-∆', editValue)}
+                                on:keydown={(e) => handleFieldKeydown(e, 'detail-∆', editValue)}
+                                rows="2"
+                                aria-label="Edit delta detail"
+                              ></textarea>
+                              {#if savingField === 'detail-∆'}
+                                <span class="status-indicator">⏳</span>
+                              {:else if savedField === 'detail-∆'}
+                                <span class="status-indicator saved">✓</span>
+                              {/if}
+                            </li>
+                          {:else}
+                            <li 
+                              class="editable-detail"
+                              class:saved={savedField === 'detail-∆'}
+                              role="button"
+                              tabindex="0"
+                              on:click={() => startEditField('detail-∆', selectedNode?.details?.['∆'] || '')}
+                              on:keydown={(e) => e.key === 'Enter' && startEditField('detail-∆', selectedNode?.details?.['∆'] || '')}
+                              aria-label="Click to edit delta detail"
+                            >
+                              ∆ | {selectedNode.details['∆']}
+                              <span class="edit-icon-inline">✏️</span>
+                              {#if savedField === 'detail-∆'}
+                                <span class="status-indicator saved">✓</span>
+                              {/if}
+                            </li>
+                          {/if}
+                        {/if}
+                        {#if selectedNode.details['→']}
+                          {#if editingField === 'detail-→'}
+                            <li class="editing-detail">
+                              <span class="detail-symbol">→</span>
+                              <textarea
+                                class="edit-textarea-inline"
+                                bind:value={editValue}
+                                on:blur={() => handleFieldBlur('detail-→', editValue)}
+                                on:keydown={(e) => handleFieldKeydown(e, 'detail-→', editValue)}
+                                rows="2"
+                                aria-label="Edit arrow detail"
+                              ></textarea>
+                              {#if savingField === 'detail-→'}
+                                <span class="status-indicator">⏳</span>
+                              {:else if savedField === 'detail-→'}
+                                <span class="status-indicator saved">✓</span>
+                              {/if}
+                            </li>
+                          {:else}
+                            <li 
+                              class="editable-detail"
+                              class:saved={savedField === 'detail-→'}
+                              role="button"
+                              tabindex="0"
+                              on:click={() => startEditField('detail-→', selectedNode?.details?.['→'] || '')}
+                              on:keydown={(e) => e.key === 'Enter' && startEditField('detail-→', selectedNode?.details?.['→'] || '')}
+                              aria-label="Click to edit arrow detail"
+                            >
+                              → | {selectedNode.details['→']}
+                              <span class="edit-icon-inline">✏️</span>
+                              {#if savedField === 'detail-→'}
+                                <span class="status-indicator saved">✓</span>
+                              {/if}
+                            </li>
+                          {/if}
+                        {/if}
                       </ul>
+                    {/if}
+
+                    {#if saveError}
+                      <div class="save-error">{saveError}</div>
                     {/if}
                     
                     <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--input-border);">
@@ -1093,31 +1650,277 @@
           {:else if northStarData}
             <div class="northstar-grid-container">
               <div class="northstar-scroll-container">
-                <div class="placeholder-content">
-                  <div class="placeholder-star star--real">
-                    <div class="star-center real-northstar-text">
-                      {#if northStarData.haiku}
-                        {#each northStarData.haiku.split(',') as line, index}
-                          <div>{line.trim()}{index < northStarData.haiku.split(',').length - 1 ? ',' : ''}</div>
-                        {/each}
-                      {:else}Essence{/if}
-                    </div>
-                    <div class="star-point north real-northstar-text">
-                      <div class="direction-heading">Growth</div>
-                      {#if northStarData.north}{#each northStarData.north as item}<div>{item.emoji} {item.phrase}</div>{/each}{/if}
-                    </div>
-                    <div class="star-point east real-northstar-text">
-                      <div class="direction-heading">Vibe</div>
-                      {#if northStarData.east}{#each northStarData.east as item}<div>{item.emoji} {item.phrase}</div>{/each}{/if}
-                    </div>
-                    <div class="star-point south real-northstar-text">
-                      <div class="direction-heading">Values</div>
-                      {#if northStarData.south}{#each northStarData.south as item}<div>{item.emoji} {item.phrase}</div>{/each}{/if}
-                    </div>
-                    <div class="star-point west real-northstar-text">
-                      <div class="direction-heading">Avoid</div>
-                      {#if northStarData.west}{#each northStarData.west as item}<div>{item.emoji} {item.phrase}</div>{/each}{/if}
-                    </div>
+                <div class="placeholder-content" on:click={(e) => {
+                  // Click outside editing fields saves changes
+                  // Only save if we're clicking on the container itself, not on editable elements
+                  if (editingNorthStarField && e.target === e.currentTarget) {
+                    const field = editingNorthStarField;
+                    const value = editNorthStarValue;
+                    saveNorthStarFieldChange(field, value);
+                  }
+                }}>
+                  <div class="placeholder-star star--real" on:click={(e) => {
+                    // Also handle clicks on the star container
+                    if (editingNorthStarField && e.target === e.currentTarget) {
+                      const field = editingNorthStarField;
+                      const value = editNorthStarValue;
+                      saveNorthStarFieldChange(field, value);
+                    }
+                  }}>
+                    <!-- Haiku (Center) -->
+                    {#if editingNorthStarField === 'haiku'}
+                      <div class="star-center real-northstar-text editing-northstar">
+                        <textarea
+                          class="edit-textarea-inline northstar-edit"
+                          bind:value={editNorthStarValue}
+                          on:blur={() => handleNorthStarFieldBlur('haiku', editNorthStarValue)}
+                          on:keydown={(e) => handleNorthStarFieldKeydown(e, 'haiku', editNorthStarValue)}
+                          rows="3"
+                          aria-label="Edit haiku"
+                        ></textarea>
+                        {#if savingNorthStarField === 'haiku'}
+                          <span class="status-indicator">⏳</span>
+                        {:else if savedNorthStarField === 'haiku'}
+                          <span class="status-indicator saved">✓</span>
+                        {/if}
+                      </div>
+                    {:else}
+                      <div 
+                        class="star-center real-northstar-text editable-northstar"
+                        class:saved={savedNorthStarField === 'haiku'}
+                        role="button"
+                        tabindex="0"
+                        on:click={() => startEditNorthStarField('haiku', northStarData.haiku)}
+                        on:keydown={(e) => e.key === 'Enter' && startEditNorthStarField('haiku', northStarData.haiku)}
+                        aria-label="Click to edit haiku"
+                      >
+                        {#if northStarData.haiku}
+                          {#each northStarData.haiku.split(',') as line, index}
+                            <div>{line.trim()}{index < northStarData.haiku.split(',').length - 1 ? ',' : ''}</div>
+                          {/each}
+                        {:else}Essence{/if}
+                        <span class="edit-icon-inline northstar-edit-icon">✏️</span>
+                        {#if savedNorthStarField === 'haiku'}
+                          <span class="status-indicator saved">✓</span>
+                        {/if}
+                      </div>
+                    {/if}
+
+                    <!-- North (Growth) -->
+                    {#if editingNorthStarField === 'direction-north'}
+                      <div 
+                        class="star-point north real-northstar-text editing-northstar-multi"
+                        on:click|stopPropagation
+                      >
+                        <div class="direction-heading">Growth</div>
+                        <div class="direction-items-edit">
+                          {#each editNorthStarValue as item, index}
+                            <div class="direction-item-edit">
+                              <input
+                                type="text"
+                                class="edit-input-inline emoji-input"
+                                bind:value={item.emoji}
+                                placeholder="emoji"
+                                aria-label="Edit emoji"
+                              />
+                              <input
+                                type="text"
+                                class="edit-input-inline phrase-input"
+                                bind:value={item.phrase}
+                                on:blur={() => handleNorthStarFieldBlur('direction-north', editNorthStarValue)}
+                                on:keydown={(e) => handleNorthStarFieldKeydown(e, 'direction-north', editNorthStarValue)}
+                                placeholder="phrase"
+                                aria-label="Edit phrase"
+                              />
+                            </div>
+                          {/each}
+                        </div>
+                        {#if savingNorthStarField === 'direction-north'}
+                          <span class="status-indicator">⏳</span>
+                        {:else if savedNorthStarField === 'direction-north'}
+                          <span class="status-indicator saved">✓</span>
+                        {/if}
+                      </div>
+                    {:else}
+                      <div 
+                        class="star-point north real-northstar-text editable-northstar"
+                        class:saved={savedNorthStarField === 'direction-north'}
+                        role="button"
+                        tabindex="0"
+                        on:click={() => startEditNorthStarField('direction-north', northStarData.north)}
+                        on:keydown={(e) => e.key === 'Enter' && startEditNorthStarField('direction-north', northStarData.north)}
+                        aria-label="Click to edit growth direction"
+                      >
+                        <div class="direction-heading">Growth</div>
+                        {#if northStarData.north}{#each northStarData.north as item}<div>{item.emoji} {item.phrase}</div>{/each}{/if}
+                        <span class="edit-icon-inline northstar-edit-icon">✏️</span>
+                        {#if savedNorthStarField === 'direction-north'}
+                          <span class="status-indicator saved">✓</span>
+                        {/if}
+                      </div>
+                    {/if}
+
+                    <!-- East (Vibe) -->
+                    {#if editingNorthStarField === 'direction-east'}
+                      <div 
+                        class="star-point east real-northstar-text editing-northstar-multi"
+                        on:click|stopPropagation
+                      >
+                        <div class="direction-heading">Vibe</div>
+                        <div class="direction-items-edit">
+                          {#each editNorthStarValue as item, index}
+                            <div class="direction-item-edit">
+                              <input
+                                type="text"
+                                class="edit-input-inline emoji-input"
+                                bind:value={item.emoji}
+                                placeholder="emoji"
+                                aria-label="Edit emoji"
+                              />
+                              <input
+                                type="text"
+                                class="edit-input-inline phrase-input"
+                                bind:value={item.phrase}
+                                on:blur={() => handleNorthStarFieldBlur('direction-east', editNorthStarValue)}
+                                on:keydown={(e) => handleNorthStarFieldKeydown(e, 'direction-east', editNorthStarValue)}
+                                placeholder="phrase"
+                                aria-label="Edit phrase"
+                              />
+                            </div>
+                          {/each}
+                        </div>
+                        {#if savingNorthStarField === 'direction-east'}
+                          <span class="status-indicator">⏳</span>
+                        {:else if savedNorthStarField === 'direction-east'}
+                          <span class="status-indicator saved">✓</span>
+                        {/if}
+                      </div>
+                    {:else}
+                      <div 
+                        class="star-point east real-northstar-text editable-northstar"
+                        class:saved={savedNorthStarField === 'direction-east'}
+                        role="button"
+                        tabindex="0"
+                        on:click={() => startEditNorthStarField('direction-east', northStarData.east)}
+                        on:keydown={(e) => e.key === 'Enter' && startEditNorthStarField('direction-east', northStarData.east)}
+                        aria-label="Click to edit vibe direction"
+                      >
+                        <div class="direction-heading">Vibe</div>
+                        {#if northStarData.east}{#each northStarData.east as item}<div>{item.emoji} {item.phrase}</div>{/each}{/if}
+                        <span class="edit-icon-inline northstar-edit-icon">✏️</span>
+                        {#if savedNorthStarField === 'direction-east'}
+                          <span class="status-indicator saved">✓</span>
+                        {/if}
+                      </div>
+                    {/if}
+
+                    <!-- South (Values) -->
+                    {#if editingNorthStarField === 'direction-south'}
+                      <div 
+                        class="star-point south real-northstar-text editing-northstar-multi"
+                        on:click|stopPropagation
+                      >
+                        <div class="direction-heading">Values</div>
+                        <div class="direction-items-edit">
+                          {#each editNorthStarValue as item, index}
+                            <div class="direction-item-edit">
+                              <input
+                                type="text"
+                                class="edit-input-inline emoji-input"
+                                bind:value={item.emoji}
+                                placeholder="emoji"
+                                aria-label="Edit emoji"
+                              />
+                              <input
+                                type="text"
+                                class="edit-input-inline phrase-input"
+                                bind:value={item.phrase}
+                                on:blur={() => handleNorthStarFieldBlur('direction-south', editNorthStarValue)}
+                                on:keydown={(e) => handleNorthStarFieldKeydown(e, 'direction-south', editNorthStarValue)}
+                                placeholder="phrase"
+                                aria-label="Edit phrase"
+                              />
+                            </div>
+                          {/each}
+                        </div>
+                        {#if savingNorthStarField === 'direction-south'}
+                          <span class="status-indicator">⏳</span>
+                        {:else if savedNorthStarField === 'direction-south'}
+                          <span class="status-indicator saved">✓</span>
+                        {/if}
+                      </div>
+                    {:else}
+                      <div 
+                        class="star-point south real-northstar-text editable-northstar"
+                        class:saved={savedNorthStarField === 'direction-south'}
+                        role="button"
+                        tabindex="0"
+                        on:click={() => startEditNorthStarField('direction-south', northStarData.south)}
+                        on:keydown={(e) => e.key === 'Enter' && startEditNorthStarField('direction-south', northStarData.south)}
+                        aria-label="Click to edit values direction"
+                      >
+                        <div class="direction-heading">Values</div>
+                        {#if northStarData.south}{#each northStarData.south as item}<div>{item.emoji} {item.phrase}</div>{/each}{/if}
+                        <span class="edit-icon-inline northstar-edit-icon">✏️</span>
+                        {#if savedNorthStarField === 'direction-south'}
+                          <span class="status-indicator saved">✓</span>
+                        {/if}
+                      </div>
+                    {/if}
+
+                    <!-- West (Avoid) -->
+                    {#if editingNorthStarField === 'direction-west'}
+                      <div 
+                        class="star-point west real-northstar-text editing-northstar-multi"
+                        on:click|stopPropagation
+                      >
+                        <div class="direction-heading">Avoid</div>
+                        <div class="direction-items-edit">
+                          {#each editNorthStarValue as item, index}
+                            <div class="direction-item-edit">
+                              <input
+                                type="text"
+                                class="edit-input-inline emoji-input"
+                                bind:value={item.emoji}
+                                placeholder="emoji"
+                                aria-label="Edit emoji"
+                              />
+                              <input
+                                type="text"
+                                class="edit-input-inline phrase-input"
+                                bind:value={item.phrase}
+                                on:blur={() => handleNorthStarFieldBlur('direction-west', editNorthStarValue)}
+                                on:keydown={(e) => handleNorthStarFieldKeydown(e, 'direction-west', editNorthStarValue)}
+                                placeholder="phrase"
+                                aria-label="Edit phrase"
+                              />
+                            </div>
+                          {/each}
+                        </div>
+                        {#if savingNorthStarField === 'direction-west'}
+                          <span class="status-indicator">⏳</span>
+                        {:else if savedNorthStarField === 'direction-west'}
+                          <span class="status-indicator saved">✓</span>
+                        {/if}
+                      </div>
+                    {:else}
+                      <div 
+                        class="star-point west real-northstar-text editable-northstar"
+                        class:saved={savedNorthStarField === 'direction-west'}
+                        role="button"
+                        tabindex="0"
+                        on:click={() => startEditNorthStarField('direction-west', northStarData.west)}
+                        on:keydown={(e) => e.key === 'Enter' && startEditNorthStarField('direction-west', northStarData.west)}
+                        aria-label="Click to edit avoid direction"
+                      >
+                        <div class="direction-heading">Avoid</div>
+                        {#if northStarData.west}{#each northStarData.west as item}<div>{item.emoji} {item.phrase}</div>{/each}{/if}
+                        <span class="edit-icon-inline northstar-edit-icon">✏️</span>
+                        {#if savedNorthStarField === 'direction-west'}
+                          <span class="status-indicator saved">✓</span>
+                        {/if}
+                      </div>
+                    {/if}
                   </div>
                 </div>
               </div>
@@ -1145,12 +1948,6 @@
     <div 
       class="dashboard-tile experiments-tile" 
       class:masked={isValidEmail(email) && !experimentsData} 
-      class:clickable={experimentsTileClickable()}
-      role={experimentsTileClickable() ? 'button' : undefined}
-      tabindex={experimentsTileClickable() ? 0 : undefined}
-      aria-label={experimentsTileClickable() ? 'Create your first experiment' : undefined}
-      on:click={experimentsTileClickable() ? handleLfgExperiments : undefined}
-      on:keydown={experimentsTileClickable() ? (e) => tileKeyActivate(e, handleLfgExperiments) : undefined}
       data-tile="experiments"
     >
       <div class="tile-header">
@@ -1171,7 +1968,7 @@
           {#if loadingExperiments}
             <div class="loading-state">Loading...</div>
           {:else if experimentsData && experimentsData.length > 0}
-            <div class="experiments-grid-container">
+            <div class="experiments-grid-container" on:click|stopPropagation>
               <div class="experiments-grid narrow-view">
                 <div class="experiments-scroll-container">
                   <table class="experiments-table" style="--exp-count: {experimentsData.length}">
@@ -1192,29 +1989,169 @@
                         {/each}
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody on:click={(e) => {
+                      // Click outside editing fields saves changes
+                      if (editingExperimentField && (e.target.tagName === 'TD' || e.target.tagName === 'TBODY')) {
+                        const parts = editingExperimentField.split('-');
+                        const experimentId = parts[0];
+                        const field = parts.slice(1).join('-');
+                        saveExperimentFieldChange(experimentId, field, editExperimentValue);
+                      }
+                    }}>
                       <tr>
                         <td class="step-label">Challenge</td>
                         {#each experimentsData as experiment}
-                          <td class="experiment-cell" title={experiment.challenge}>{experiment.challenge}</td>
+                          {#if editingExperimentField === `${experiment.id}-challenge`}
+                            <td class="experiment-cell editing-experiment" on:click|stopPropagation>
+                              <textarea
+                                class="edit-textarea-inline experiment-edit"
+                                bind:value={editExperimentValue}
+                                on:blur={() => handleExperimentFieldBlur(experiment.id, 'challenge', editExperimentValue)}
+                                on:keydown={(e) => handleExperimentFieldKeydown(e, experiment.id, 'challenge', editExperimentValue)}
+                                rows="2"
+                                aria-label="Edit challenge"
+                              ></textarea>
+                              {#if savingExperimentField === `${experiment.id}-challenge`}
+                                <span class="status-indicator">⏳</span>
+                              {:else if savedExperimentField === `${experiment.id}-challenge`}
+                                <span class="status-indicator saved">✓</span>
+                              {/if}
+                            </td>
+                          {:else}
+                            <td 
+                              class="experiment-cell editable-experiment"
+                              class:saved={savedExperimentField === `${experiment.id}-challenge`}
+                              title={experiment.challenge}
+                              role="button"
+                              tabindex="0"
+                              on:click|stopPropagation={() => startEditExperimentField(experiment.id, 'challenge', experiment.challenge)}
+                              on:keydown={(e) => e.key === 'Enter' && startEditExperimentField(experiment.id, 'challenge', experiment.challenge)}
+                              aria-label="Click to edit challenge"
+                            >
+                              {experiment.challenge}
+                              <span class="edit-icon-inline experiment-edit-icon">✏️</span>
+                              {#if savedExperimentField === `${experiment.id}-challenge`}
+                                <span class="status-indicator saved">✓</span>
+                              {/if}
+                            </td>
+                          {/if}
                         {/each}
                       </tr>
                       <tr>
                         <td class="step-label">Hypothesis</td>
                         {#each experimentsData as experiment}
-                          <td class="experiment-cell" title={experiment.hypothesis}>{experiment.hypothesis}</td>
+                          {#if editingExperimentField === `${experiment.id}-hypothesis`}
+                            <td class="experiment-cell editing-experiment" on:click|stopPropagation>
+                              <textarea
+                                class="edit-textarea-inline experiment-edit"
+                                bind:value={editExperimentValue}
+                                on:blur={() => handleExperimentFieldBlur(experiment.id, 'hypothesis', editExperimentValue)}
+                                on:keydown={(e) => handleExperimentFieldKeydown(e, experiment.id, 'hypothesis', editExperimentValue)}
+                                rows="2"
+                                aria-label="Edit hypothesis"
+                              ></textarea>
+                              {#if savingExperimentField === `${experiment.id}-hypothesis`}
+                                <span class="status-indicator">⏳</span>
+                              {:else if savedExperimentField === `${experiment.id}-hypothesis`}
+                                <span class="status-indicator saved">✓</span>
+                              {/if}
+                            </td>
+                          {:else}
+                            <td 
+                              class="experiment-cell editable-experiment"
+                              class:saved={savedExperimentField === `${experiment.id}-hypothesis`}
+                              title={experiment.hypothesis}
+                              role="button"
+                              tabindex="0"
+                              on:click|stopPropagation={() => startEditExperimentField(experiment.id, 'hypothesis', experiment.hypothesis)}
+                              on:keydown={(e) => e.key === 'Enter' && startEditExperimentField(experiment.id, 'hypothesis', experiment.hypothesis)}
+                              aria-label="Click to edit hypothesis"
+                            >
+                              {experiment.hypothesis}
+                              <span class="edit-icon-inline experiment-edit-icon">✏️</span>
+                              {#if savedExperimentField === `${experiment.id}-hypothesis`}
+                                <span class="status-indicator saved">✓</span>
+                              {/if}
+                            </td>
+                          {/if}
                         {/each}
                       </tr>
                       <tr>
                         <td class="step-label">Intervention</td>
                         {#each experimentsData as experiment}
-                          <td class="experiment-cell" title={experiment.intervention}>{experiment.intervention}</td>
+                          {#if editingExperimentField === `${experiment.id}-intervention`}
+                            <td class="experiment-cell editing-experiment" on:click|stopPropagation>
+                              <textarea
+                                class="edit-textarea-inline experiment-edit"
+                                bind:value={editExperimentValue}
+                                on:blur={() => handleExperimentFieldBlur(experiment.id, 'intervention', editExperimentValue)}
+                                on:keydown={(e) => handleExperimentFieldKeydown(e, experiment.id, 'intervention', editExperimentValue)}
+                                rows="2"
+                                aria-label="Edit intervention"
+                              ></textarea>
+                              {#if savingExperimentField === `${experiment.id}-intervention`}
+                                <span class="status-indicator">⏳</span>
+                              {:else if savedExperimentField === `${experiment.id}-intervention`}
+                                <span class="status-indicator saved">✓</span>
+                              {/if}
+                            </td>
+                          {:else}
+                            <td 
+                              class="experiment-cell editable-experiment"
+                              class:saved={savedExperimentField === `${experiment.id}-intervention`}
+                              title={experiment.intervention}
+                              role="button"
+                              tabindex="0"
+                              on:click|stopPropagation={() => startEditExperimentField(experiment.id, 'intervention', experiment.intervention)}
+                              on:keydown={(e) => e.key === 'Enter' && startEditExperimentField(experiment.id, 'intervention', experiment.intervention)}
+                              aria-label="Click to edit intervention"
+                            >
+                              {experiment.intervention}
+                              <span class="edit-icon-inline experiment-edit-icon">✏️</span>
+                              {#if savedExperimentField === `${experiment.id}-intervention`}
+                                <span class="status-indicator saved">✓</span>
+                              {/if}
+                            </td>
+                          {/if}
                         {/each}
                       </tr>
                       <tr>
                         <td class="step-label">Measure</td>
                         {#each experimentsData as experiment}
-                          <td class="experiment-cell" title={experiment.measure}>{experiment.measure}</td>
+                          {#if editingExperimentField === `${experiment.id}-measure`}
+                            <td class="experiment-cell editing-experiment" on:click|stopPropagation>
+                              <textarea
+                                class="edit-textarea-inline experiment-edit"
+                                bind:value={editExperimentValue}
+                                on:blur={() => handleExperimentFieldBlur(experiment.id, 'measure', editExperimentValue)}
+                                on:keydown={(e) => handleExperimentFieldKeydown(e, experiment.id, 'measure', editExperimentValue)}
+                                rows="2"
+                                aria-label="Edit measure"
+                              ></textarea>
+                              {#if savingExperimentField === `${experiment.id}-measure`}
+                                <span class="status-indicator">⏳</span>
+                              {:else if savedExperimentField === `${experiment.id}-measure`}
+                                <span class="status-indicator saved">✓</span>
+                              {/if}
+                            </td>
+                          {:else}
+                            <td 
+                              class="experiment-cell editable-experiment"
+                              class:saved={savedExperimentField === `${experiment.id}-measure`}
+                              title={experiment.measure}
+                              role="button"
+                              tabindex="0"
+                              on:click|stopPropagation={() => startEditExperimentField(experiment.id, 'measure', experiment.measure)}
+                              on:keydown={(e) => e.key === 'Enter' && startEditExperimentField(experiment.id, 'measure', experiment.measure)}
+                              aria-label="Click to edit measure"
+                            >
+                              {experiment.measure}
+                              <span class="edit-icon-inline experiment-edit-icon">✏️</span>
+                              {#if savedExperimentField === `${experiment.id}-measure`}
+                                <span class="status-indicator saved">✓</span>
+                              {/if}
+                            </td>
+                          {/if}
                         {/each}
                       </tr>
                       <tr>
@@ -1566,6 +2503,292 @@
 
   .details { list-style-type: none;margin:.25rem 0 0; padding-left:1rem; }
   .details li { list-style-type: none; margin:.25rem 0; }
+
+  /* Progressive edit styling */
+  .editable-row {
+    position: relative;
+    padding: 0.5rem;
+    margin: -0.5rem;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .editable-row:hover {
+    border-color: rgba(34, 58, 94, 0.3); /* brand-deep at 30% */
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .editable-row:focus {
+    outline: 2px solid var(--brand-deep);
+    outline-offset: 2px;
+  }
+
+  .editable-row.saved {
+    background: rgba(34, 197, 94, 0.1);
+  }
+
+  .editable-detail {
+    position: relative;
+    padding: 0.4rem;
+    margin: -0.4rem;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+
+  .editable-detail:hover {
+    border-color: rgba(34, 58, 94, 0.3);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .editable-detail:focus {
+    outline: 2px solid var(--brand-deep);
+    outline-offset: 2px;
+  }
+
+  .editable-detail.saved {
+    background: rgba(34, 197, 94, 0.1);
+  }
+
+  .edit-icon-inline {
+    opacity: 0;
+    font-size: 0.85rem;
+    margin-left: 0.5rem;
+    transition: opacity 0.2s ease;
+  }
+
+  .editable-row:hover .edit-icon-inline,
+  .editable-detail:hover .edit-icon-inline {
+    opacity: 0.6;
+  }
+
+  .status-indicator {
+    margin-left: 0.5rem;
+    font-size: 1rem;
+  }
+
+  .status-indicator.saved {
+    color: #22c55e;
+  }
+
+  /* Edit mode styling */
+  .editing-row,
+  .editing-detail {
+    padding: 0.5rem;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .edit-select-inline {
+    flex: 1;
+    padding: 0.5rem;
+    border: 2px solid var(--brand-deep);
+    border-radius: 4px;
+    background: var(--input-bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 1rem;
+    cursor: pointer;
+    min-height: 44px;
+  }
+
+  .edit-select-inline:focus {
+    outline: none;
+    border-color: var(--brand-accent);
+    box-shadow: 0 0 0 3px rgba(34, 58, 94, 0.1);
+  }
+
+  .edit-textarea-inline {
+    width: 100%;
+    padding: 0.5rem;
+    border: 2px solid var(--brand-deep);
+    border-radius: 4px;
+    background: var(--input-bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 1rem;
+    resize: vertical;
+    min-height: 60px;
+    line-height: 1.4;
+  }
+
+  .edit-textarea-inline:focus {
+    outline: none;
+    border-color: var(--brand-accent);
+    box-shadow: 0 0 0 3px rgba(34, 58, 94, 0.1);
+  }
+
+  .editing-detail {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .detail-symbol {
+    font-weight: 700;
+    margin-top: 0.5rem;
+  }
+
+  .save-error {
+    color: var(--color-error);
+    font-size: 0.85rem;
+    padding: 0.5rem;
+    background: rgba(255, 68, 68, 0.1);
+    border-radius: 4px;
+    margin-top: 0.5rem;
+  }
+
+  /* Mobile touch targets */
+  @media (max-width: 768px) {
+    .editable-row,
+    .editable-detail {
+      min-height: 48px;
+    }
+
+    .edit-select-inline,
+    .edit-textarea-inline {
+      min-height: 48px;
+      font-size: 16px; /* Prevents zoom on iOS */
+    }
+  }
+
+  /* North Star editable styling */
+  .editable-northstar {
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .editable-northstar:hover {
+    box-shadow: 0 0 0 2px rgba(34, 58, 94, 0.3);
+  }
+
+  .editable-northstar.saved {
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.5);
+  }
+
+  .northstar-edit-icon {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    opacity: 0;
+    font-size: 0.85rem;
+    transition: opacity 0.2s ease;
+  }
+
+  .editable-northstar:hover .northstar-edit-icon {
+    opacity: 0.6;
+  }
+
+  .editing-northstar {
+    position: relative;
+  }
+
+  .northstar-edit {
+    width: 100%;
+    min-height: 80px;
+    font-size: 0.9rem;
+  }
+
+  .editing-northstar-multi {
+    position: relative;
+  }
+
+  .direction-items-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.4rem;
+    width: 100%;
+  }
+
+  .direction-item-edit {
+    display: flex;
+    gap: 0.3rem;
+    align-items: center;
+    width: 100%;
+  }
+
+  .emoji-input {
+    width: 2.2rem;
+    min-width: 2.2rem;
+    flex-shrink: 0;
+    text-align: center;
+    padding: 0.3rem 0.1rem;
+    border: 1px solid var(--brand-deep);
+    border-radius: 4px;
+    background: var(--input-bg);
+    color: var(--text);
+    font-size: 1rem;
+    box-sizing: border-box;
+  }
+
+  .phrase-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.3rem 0.4rem;
+    border: 1px solid var(--brand-deep);
+    border-radius: 4px;
+    background: var(--input-bg);
+    color: var(--text);
+    font-size: 0.75rem;
+    box-sizing: border-box;
+  }
+
+  .emoji-input:focus,
+  .phrase-input:focus {
+    outline: none;
+    border-color: var(--brand-accent);
+    box-shadow: 0 0 0 1px rgba(34, 58, 94, 0.2);
+  }
+
+  /* Experiment table editable styling */
+  .editable-experiment {
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .editable-experiment:hover {
+    background: rgba(34, 58, 94, 0.1);
+    box-shadow: inset 0 0 0 1px rgba(34, 58, 94, 0.3);
+  }
+
+  .editable-experiment.saved {
+    background: rgba(34, 197, 94, 0.1);
+  }
+
+  .experiment-edit-icon {
+    opacity: 0;
+    font-size: 0.75rem;
+    margin-left: 0.25rem;
+    transition: opacity 0.2s ease;
+  }
+
+  .editable-experiment:hover .experiment-edit-icon {
+    opacity: 0.6;
+  }
+
+  .editing-experiment {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.5rem;
+  }
+
+  .experiment-edit {
+    width: 100%;
+    min-height: 60px;
+    font-size: 0.8rem;
+  }
 
   
   /* North Star */
