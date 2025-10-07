@@ -75,17 +75,20 @@
 
 <div 
   class="carousel-container"
-  on:mouseenter={() => isPaused = true}
-  on:mouseleave={() => isPaused = false}
-  on:focusin={() => isPaused = true}
-  on:focusout={() => isPaused = false}
   role="region"
   aria-label="TEND feature carousel"
   aria-live="polite"
 >
   <div class="carousel-content">
     <!-- Slides -->
-    <div class="carousel-track" style="transform: translateX(-{currentSlide * 100}%)">
+    <div 
+      class="carousel-track" 
+      style="transform: translateX(-{currentSlide * 100}%)"
+      on:mouseenter={() => isPaused = true}
+      on:mouseleave={() => isPaused = false}
+      on:focusin={() => isPaused = true}
+      on:focusout={() => isPaused = false}
+    >
       {#each slides as slide, i}
         <div 
           class="carousel-slide" 
@@ -126,7 +129,7 @@
 
       <button
         class="carousel-nav next"
-        on:click={() => { nextSlide(); resetInterval(); }}
+        on:click={() => { currentSlide = (currentSlide + 1) % slides.length; resetInterval(); }}
         on:keydown={handleKeydown}
         aria-label="Next slide"
         type="button"
