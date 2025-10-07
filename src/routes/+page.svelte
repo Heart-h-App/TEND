@@ -1114,7 +1114,9 @@
 <svelte:window on:pointerdown={handleGlobalPointerDown} />
 
 <main class="container">
+  {#if !($user && $user.authenticated)}
   <ExplainerCarousel />
+  {/if}
   
   <div class="dashboard-header">
     <h2>TEND<br /><span style="font-size: 0.8em; font-style: italic; color: var(--text);">nurture your connections</span></h2>
