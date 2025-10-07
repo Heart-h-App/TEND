@@ -24,8 +24,8 @@
       <div class="hero-copy">
         <h1>Welcome to Heart(h)!</h1>
         <p>
-          Heart(h) software helps you connect with yourself and others, finding more joy and
-          satisfaction with less grind and overwhelm
+          More joy, growth, &
+          satisfaction ... less grind & overwhelm
         </p>
       </div>
     </div>

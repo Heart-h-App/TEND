@@ -5,6 +5,7 @@
   import Diagram from "$lib/components/diagramConnection.svelte";
   import StarRating from "$lib/components/StarRating.svelte";
   import { writable } from 'svelte/store';
+  import ExplainerCarousel from '$lib/components/ExplainerCarousel.svelte';
   export const toast = writable<string | null>(null);
 
   type Rel = {
@@ -1113,6 +1114,8 @@
 <svelte:window on:pointerdown={handleGlobalPointerDown} />
 
 <main class="container">
+  <ExplainerCarousel />
+  
   <div class="dashboard-header">
     <h2>TEND<br /><span style="font-size: 0.8em; font-style: italic; color: var(--text);">nurture your connections</span></h2>
 
@@ -1131,7 +1134,7 @@
             password = '';
             confirmPassword = '';
           }}
-          placeholder="Sign up or log in with your email"
+          placeholder="Enter your email to sign up / log in"
           class:error={emailError}
           disabled={authLoading}
         />
