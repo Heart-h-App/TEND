@@ -26,7 +26,7 @@
             Work with coach paul to strengthen mental & emotional fitness and use experiments to grow through challenges.
           </p>
           <a 
-            href="https://forms.gle/V2GyDfSpK12iTcqm9" 
+            href="https://calendly.com/paulhudsonmack/connect-w-paul"
             target="_blank" 
             rel="noopener noreferrer"
             class="cta-button secondary"
@@ -52,16 +52,16 @@
     </div>
 
     <div class="bio-section">
-      <h2>About Heart(h)</h2>
+      <h2>About paul, TEND creator</h2>
       <div class="bio-content">
         <p>
-          Hi, I'm paul hudson mack (<a href="https://www.linkedin.com/in/paul-hudson-mack-msw-3b43b310/">LinkedIn</a>).
+          Hi, I'm paul hudson mack (<a href="https://www.linkedin.com/in/paulhudsonmack/">LinkedIn</a>).
           <br><br>
           I started Heart(h) because no one gets addicted to their toasters ... 
           and yet a lot of software keeps people doomscrolling and ruins internal well-being & relationships.
-          We all deserve self-work and behavioral health tools more like my favorite toaster - does its job well and leaves my system nourished to engage the rest of life.
+          We all deserve self-work and behavioral health tools more like my favorite toaster - does its job well and leaves us nourished to engage the rest of life.
           <br><br>
-          I take insights from leading edge behavioral science and build tools that empower users to create traction and results daily.
+          I take insights from leading edge behavioral science and build tools that empower users to create daiuly traction and results.
           TEND combines lean experimentation, design thinking, modern neuroscience, and positive psychology - and uses AI to streamline how users create artifacts to support their self- and relationship-work.
         </p>
         <p>

@@ -22,7 +22,7 @@
       </a>
 
       <div class="hero-copy">
-        <h1>Welcome to Heart(h)!</h1>
+        <h1>Welcome to TEND!</h1>
         <p>
           More joy, growth, &
           satisfaction ... less grind & overwhelm

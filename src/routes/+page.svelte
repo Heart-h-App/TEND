@@ -328,6 +328,15 @@
   }
 
   async function handleGlobalPointerDown(ev: PointerEvent) {
+    const path = (ev as any).composedPath?.() ?? [];
+    const skipEmailNudge = path.some((node: any) => {
+      if (!(node instanceof HTMLElement)) return false;
+      if (node.dataset?.skipEmailNudge === 'true') return true;
+      return node.classList?.contains('footer-cta-button');
+    });
+
+    if (skipEmailNudge) return;
+
     // Nudge for email if field is visible and email is invalid
     if (showEmailInput && !isValidEmail(email)) {
       nudgeForEmail(ev);
@@ -1119,7 +1128,7 @@
   {/if}
   
   <div class="dashboard-header">
-    <h2>TEND<br /><span style="font-size: 0.8em; font-style: italic; color: var(--text);">nurture your connections</span></h2>
+    <h2>LET'S TEND<br /><span style="font-size: 0.8em; font-style: italic; color: var(--text);">nurture your connections</span></h2>
 
     <form on:submit|preventDefault={handleAuth}>
       {#if showEmailInput}
