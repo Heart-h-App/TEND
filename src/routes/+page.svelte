@@ -6,6 +6,7 @@
   import StarRating from "$lib/components/StarRating.svelte";
   import { writable } from 'svelte/store';
   import ExplainerCarousel from '$lib/components/ExplainerCarousel.svelte';
+  import ExperimentsCarousel from '$lib/components/ExperimentsCarousel.svelte';
   export const toast = writable<string | null>(null);
 
   type Rel = {
@@ -788,6 +789,10 @@
       e.preventDefault();
       saveExperimentFieldChange(experimentId, field, value);
     }
+  }
+
+  function setEditExperimentValue(value: string) {
+    editExperimentValue = value;
   }
 
   function handleAddRelationship() {
@@ -1983,224 +1988,19 @@
             <div class="loading-state">Loading...</div>
           {:else if experimentsData && experimentsData.length > 0}
             <div class="experiments-grid-container" on:click|stopPropagation>
-              <div class="experiments-grid narrow-view">
-                <div class="experiments-scroll-container">
-                  <table class="experiments-table" style="--exp-count: {experimentsData.length}">
-                    <colgroup>
-                      <col class="col-step" />
-                      {#each experimentsData as _}
-                        <col class="col-exp" />
-                      {/each}
-                    </colgroup>
-                    <thead>
-                      <tr>
-                        <th class="step-header"></th>
-                        {#each experimentsData as experiment, index}
-                          <th class="experiment-header" class:completed={experiment.learnings}>
-                            <div class="experiment-number">{index + 1}</div>
-                            <div class="experiment-date">{new Date(experiment.createdAt).toLocaleDateString()}</div>
-                          </th>
-                        {/each}
-                      </tr>
-                    </thead>
-                    <tbody on:click={(e) => {
-                      // Click outside editing fields saves changes
-                      if (editingExperimentField && (e.target.tagName === 'TD' || e.target.tagName === 'TBODY')) {
-                        const parts = editingExperimentField.split('-');
-                        const experimentId = parts[0];
-                        const field = parts.slice(1).join('-');
-                        saveExperimentFieldChange(experimentId, field, editExperimentValue);
-                      }
-                    }}>
-                      <tr>
-                        <td class="step-label">Challenge</td>
-                        {#each experimentsData as experiment}
-                          {#if editingExperimentField === `${experiment.id}-challenge`}
-                            <td class="experiment-cell editing-experiment" on:click|stopPropagation>
-                              <textarea
-                                class="edit-textarea-inline experiment-edit"
-                                bind:value={editExperimentValue}
-                                on:blur={() => handleExperimentFieldBlur(experiment.id, 'challenge', editExperimentValue)}
-                                on:keydown={(e) => handleExperimentFieldKeydown(e, experiment.id, 'challenge', editExperimentValue)}
-                                rows="2"
-                                aria-label="Edit challenge"
-                              ></textarea>
-                              {#if savingExperimentField === `${experiment.id}-challenge`}
-                                <span class="status-indicator">⏳</span>
-                              {:else if savedExperimentField === `${experiment.id}-challenge`}
-                                <span class="status-indicator saved">✓</span>
-                              {/if}
-                            </td>
-                          {:else}
-                            <td 
-                              class="experiment-cell editable-experiment"
-                              class:saved={savedExperimentField === `${experiment.id}-challenge`}
-                              title={experiment.challenge}
-                              role="button"
-                              tabindex="0"
-                              on:click|stopPropagation={() => startEditExperimentField(experiment.id, 'challenge', experiment.challenge)}
-                              on:keydown={(e) => e.key === 'Enter' && startEditExperimentField(experiment.id, 'challenge', experiment.challenge)}
-                              aria-label="Click to edit challenge"
-                            >
-                              {experiment.challenge}
-                              <span class="edit-icon-inline experiment-edit-icon">✏️</span>
-                              {#if savedExperimentField === `${experiment.id}-challenge`}
-                                <span class="status-indicator saved">✓</span>
-                              {/if}
-                            </td>
-                          {/if}
-                        {/each}
-                      </tr>
-                      <tr>
-                        <td class="step-label">Hypothesis</td>
-                        {#each experimentsData as experiment}
-                          {#if editingExperimentField === `${experiment.id}-hypothesis`}
-                            <td class="experiment-cell editing-experiment" on:click|stopPropagation>
-                              <textarea
-                                class="edit-textarea-inline experiment-edit"
-                                bind:value={editExperimentValue}
-                                on:blur={() => handleExperimentFieldBlur(experiment.id, 'hypothesis', editExperimentValue)}
-                                on:keydown={(e) => handleExperimentFieldKeydown(e, experiment.id, 'hypothesis', editExperimentValue)}
-                                rows="2"
-                                aria-label="Edit hypothesis"
-                              ></textarea>
-                              {#if savingExperimentField === `${experiment.id}-hypothesis`}
-                                <span class="status-indicator">⏳</span>
-                              {:else if savedExperimentField === `${experiment.id}-hypothesis`}
-                                <span class="status-indicator saved">✓</span>
-                              {/if}
-                            </td>
-                          {:else}
-                            <td 
-                              class="experiment-cell editable-experiment"
-                              class:saved={savedExperimentField === `${experiment.id}-hypothesis`}
-                              title={experiment.hypothesis}
-                              role="button"
-                              tabindex="0"
-                              on:click|stopPropagation={() => startEditExperimentField(experiment.id, 'hypothesis', experiment.hypothesis)}
-                              on:keydown={(e) => e.key === 'Enter' && startEditExperimentField(experiment.id, 'hypothesis', experiment.hypothesis)}
-                              aria-label="Click to edit hypothesis"
-                            >
-                              {experiment.hypothesis}
-                              <span class="edit-icon-inline experiment-edit-icon">✏️</span>
-                              {#if savedExperimentField === `${experiment.id}-hypothesis`}
-                                <span class="status-indicator saved">✓</span>
-                              {/if}
-                            </td>
-                          {/if}
-                        {/each}
-                      </tr>
-                      <tr>
-                        <td class="step-label">Intervention</td>
-                        {#each experimentsData as experiment}
-                          {#if editingExperimentField === `${experiment.id}-intervention`}
-                            <td class="experiment-cell editing-experiment" on:click|stopPropagation>
-                              <textarea
-                                class="edit-textarea-inline experiment-edit"
-                                bind:value={editExperimentValue}
-                                on:blur={() => handleExperimentFieldBlur(experiment.id, 'intervention', editExperimentValue)}
-                                on:keydown={(e) => handleExperimentFieldKeydown(e, experiment.id, 'intervention', editExperimentValue)}
-                                rows="2"
-                                aria-label="Edit intervention"
-                              ></textarea>
-                              {#if savingExperimentField === `${experiment.id}-intervention`}
-                                <span class="status-indicator">⏳</span>
-                              {:else if savedExperimentField === `${experiment.id}-intervention`}
-                                <span class="status-indicator saved">✓</span>
-                              {/if}
-                            </td>
-                          {:else}
-                            <td 
-                              class="experiment-cell editable-experiment"
-                              class:saved={savedExperimentField === `${experiment.id}-intervention`}
-                              title={experiment.intervention}
-                              role="button"
-                              tabindex="0"
-                              on:click|stopPropagation={() => startEditExperimentField(experiment.id, 'intervention', experiment.intervention)}
-                              on:keydown={(e) => e.key === 'Enter' && startEditExperimentField(experiment.id, 'intervention', experiment.intervention)}
-                              aria-label="Click to edit intervention"
-                            >
-                              {experiment.intervention}
-                              <span class="edit-icon-inline experiment-edit-icon">✏️</span>
-                              {#if savedExperimentField === `${experiment.id}-intervention`}
-                                <span class="status-indicator saved">✓</span>
-                              {/if}
-                            </td>
-                          {/if}
-                        {/each}
-                      </tr>
-                      <tr>
-                        <td class="step-label">Measure</td>
-                        {#each experimentsData as experiment}
-                          {#if editingExperimentField === `${experiment.id}-measure`}
-                            <td class="experiment-cell editing-experiment" on:click|stopPropagation>
-                              <textarea
-                                class="edit-textarea-inline experiment-edit"
-                                bind:value={editExperimentValue}
-                                on:blur={() => handleExperimentFieldBlur(experiment.id, 'measure', editExperimentValue)}
-                                on:keydown={(e) => handleExperimentFieldKeydown(e, experiment.id, 'measure', editExperimentValue)}
-                                rows="2"
-                                aria-label="Edit measure"
-                              ></textarea>
-                              {#if savingExperimentField === `${experiment.id}-measure`}
-                                <span class="status-indicator">⏳</span>
-                              {:else if savedExperimentField === `${experiment.id}-measure`}
-                                <span class="status-indicator saved">✓</span>
-                              {/if}
-                            </td>
-                          {:else}
-                            <td 
-                              class="experiment-cell editable-experiment"
-                              class:saved={savedExperimentField === `${experiment.id}-measure`}
-                              title={experiment.measure}
-                              role="button"
-                              tabindex="0"
-                              on:click|stopPropagation={() => startEditExperimentField(experiment.id, 'measure', experiment.measure)}
-                              on:keydown={(e) => e.key === 'Enter' && startEditExperimentField(experiment.id, 'measure', experiment.measure)}
-                              aria-label="Click to edit measure"
-                            >
-                              {experiment.measure}
-                              <span class="edit-icon-inline experiment-edit-icon">✏️</span>
-                              {#if savedExperimentField === `${experiment.id}-measure`}
-                                <span class="status-indicator saved">✓</span>
-                              {/if}
-                            </td>
-                          {/if}
-                        {/each}
-                      </tr>
-                      <tr>
-                        <td class="step-label">Rating</td>
-                        {#each experimentsData as experiment}
-                          <td class="experiment-cell rating-cell" on:click|stopPropagation>
-                            <StarRating 
-                              rating={experiment.rating} 
-                              experimentId={experiment.id} 
-                              ownerEmail={email} 
-                              size="small" 
-                              readonly={false}
-                            />
-                          </td>
-                        {/each}
-                      </tr>
-                      <tr>
-                        <td class="step-label"></td>
-                        {#each experimentsData as experiment}
-                          <td class="experiment-cell rating-cell" on:click|stopPropagation>
-                            <button
-                              on:click={() => handleDeleteExperiment(experiment)}
-                              style="width: 100%; padding: 0.5rem; background-color: var(--brand-primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.85rem;"
-                              aria-label="Delete experiment"
-                              title="Delete this experiment"
-                            >
-                              Delete
-                            </button>
-                          </td>
-                        {/each}
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <ExperimentsCarousel
+                experiments={experimentsData}
+                email={email}
+                editingExperimentField={editingExperimentField}
+                editExperimentValue={editExperimentValue}
+                savingExperimentField={savingExperimentField}
+                savedExperimentField={savedExperimentField}
+                startEditExperimentField={startEditExperimentField}
+                handleExperimentFieldBlur={handleExperimentFieldBlur}
+                handleExperimentFieldKeydown={handleExperimentFieldKeydown}
+                handleDeleteExperiment={handleDeleteExperiment}
+                setEditExperimentValue={setEditExperimentValue}
+              />
             </div>
           {:else}
             <div class="placeholder-content">
@@ -2766,45 +2566,6 @@
     box-shadow: 0 0 0 1px rgba(34, 58, 94, 0.2);
   }
 
-  /* Experiment table editable styling */
-  .editable-experiment {
-    position: relative;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .editable-experiment:hover {
-    background: rgba(34, 58, 94, 0.1);
-    box-shadow: inset 0 0 0 1px rgba(34, 58, 94, 0.3);
-  }
-
-  .editable-experiment.saved {
-    background: rgba(34, 197, 94, 0.1);
-  }
-
-  .experiment-edit-icon {
-    opacity: 0;
-    font-size: 0.75rem;
-    margin-left: 0.25rem;
-    transition: opacity 0.2s ease;
-  }
-
-  .editable-experiment:hover .experiment-edit-icon {
-    opacity: 0.6;
-  }
-
-  .editing-experiment {
-    background: rgba(255, 255, 255, 0.05);
-    padding: 0.5rem;
-  }
-
-  .experiment-edit {
-    width: 100%;
-    min-height: 60px;
-    font-size: 0.8rem;
-  }
-
-  
   /* North Star */
   
   /* Turn container into a 3x3 grid with center in the middle */
@@ -3093,78 +2854,7 @@
     opacity: 1;
   }
 
-  /* Experiments table */
   .experiments-grid-container { width: 100%; }
-  .narrow-view { display: block; }
-  .experiments-scroll-container { overflow-x: auto; overflow-y: visible; width: 100%; border: 1px solid var(--input-border); border-radius: 6px; }
-  .experiments-table {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-  }
-  .col-step { width: 160px; }
-  .col-exp  { width: 220px; }
-
-  .experiments-table th.experiment-header,
-  .experiments-table td.experiment-cell {
-    width: auto;
-    max-width: none;
-  }
-
-  .experiments-table .step-label {
-    white-space: nowrap;
-  }
-
-  .rating-cell {
-    display: table-cell;
-    text-align: center;
-    padding: .5rem .25rem;
-    width: auto;
-    min-width: 150px;
-    max-width: 180px;
-    box-sizing: border-box;
-  }
-
-  .rating-cell :global(.star-rating) {
-    display: inline-flex;
-    width: auto;
-    max-width: none;
-    flex: 0 0 auto;
-  }
-  .rating-cell :global(.stars-container) {
-    width: auto;
-    justify-content: center;
-    flex-wrap: nowrap;
-  }
-
-  .experiments-scroll-container {
-    max-width: 100%;
-    overflow-x: auto;
-  }
-  .experiments-table .step-label {
-    width: auto;
-    min-width: fit-content;
-    white-space: nowrap;
-    padding: .5rem .75rem;
-  }
-
-
-  .step-header, .experiment-header, .experiment-number-header, .status-header {
-    background: var(--input-bg); border-bottom: 2px solid var(--input-border); padding: .5rem; text-align: left; font-weight: 600; color: var(--heading); font-size: .8rem;
-  }
-  .step-label { background: var(--input-bg); border-right: 2px solid var(--input-border); padding: .5rem; font-weight: 600; color: var(--heading); font-size: .8rem; white-space: nowrap; min-width: 120px; }
-  .experiment-header { min-width: 200px; text-align: center; border-right: 1px solid var(--input-border); }
-  .experiment-header.completed { background-color: rgba(34,197,94,.1); }
-  .experiment-number { font-size: 1rem; font-weight: 700; color: var(--button-bg); margin-bottom: .25rem; }
-  .experiment-header.completed .experiment-number { color: #22c55e; }
-  .experiment-date { font-size: .7rem; color: var(--text); opacity: .8; margin-bottom: .25rem; }
-  .experiment-status-badge .status { font-size: .9rem; }
-
-  .experiment-cell {
-    padding: .5rem; border-right: 1px solid var(--input-border); border-bottom: 1px solid var(--input-border);
-    vertical-align: top; font-size: .8rem; line-height: 1.3; color: var(--text); max-width: 200px; overflow-wrap: anywhere;
-  }
-  .narrow-view .experiment-cell { min-width: 150px; max-width: 180px; }
 
   .toast {
   position: fixed;
