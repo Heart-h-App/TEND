@@ -77,7 +77,6 @@
             if (!res2.ok) {
               console.error('Save failed:', saved?.error);
             } else {
-              console.log('Saved experiment id:', saved.id);
               // Update the result with the saved experiment ID and other DB fields
               result = { ...result, id: saved.id, createdAt: saved.createdAt, updatedAt: saved.updatedAt };
             }

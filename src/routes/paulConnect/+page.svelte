@@ -23,7 +23,7 @@
         <div class="cta-card">
           <h3 style="margin-top: 0;">🎯 1:1 Coaching</h3>
           <p>
-            Work with coach paul to strengthen mental & emotional fitness and use experiments to grow through challenges.
+            Work with paul to create more customized experiments and get help applying tools like TEND to your specific challenges.
           </p>
           <a 
             href="https://calendly.com/paulhudsonmack/connect-w-paul"
@@ -38,7 +38,7 @@
         <div class="cta-card">
           <h3 style="margin-top: 0;">💬 Slide in my DMs</h3>
           <p>
-            Interested in workshops, partnerships, or have questions/feedback about Heart(h)? 
+            Interested in workshops, partnerships, or have questions/feedback about TEND?
             Let's start a conversation about it!
           </p>
           <button 
@@ -55,13 +55,13 @@
       <h2>About paul, TEND creator</h2>
       <div class="bio-content">
         <p>
-          Hi, I'm paul hudson mack (<a href="https://www.linkedin.com/in/paulhudsonmack/">LinkedIn</a>).
+          Hi, I'm paul hudson mack (<a href="https://www.linkedin.com/in/paulhudsonmack/">LinkedIn</a>, <a href="https://www.psychologytoday.com/us/therapists/paul-hudson-mack-detroit-mi/1645135">Psychology Today</a>).
           <br><br>
-          I started Heart(h) because no one gets addicted to their toasters ... 
-          and yet a lot of software keeps people doomscrolling and ruins internal well-being & relationships.
+          I started TEND because no one gets addicted to their toasters ...
+          yet too much software keeps us doomscrolling and ruins internal & relational well-being.
           We all deserve self-work and behavioral health tools more like my favorite toaster - does its job well and leaves us nourished to engage the rest of life.
           <br><br>
-          I take insights from leading edge behavioral science and build tools that empower users to create daiuly traction and results.
+          I take insights from leading edge behavioral science and build tools that empower users to create daily traction and results.
           TEND combines lean experimentation, design thinking, modern neuroscience, and positive psychology - and uses AI to streamline how users create artifacts to support their self- and relationship-work.
         </p>
         <p>

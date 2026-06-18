@@ -96,13 +96,7 @@ export async function POST({ request }) {
 
     const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 
-    // Log what we're sending to the model
     const userMessage = `${CONTRACT}\n\nText:\n${text}${contextualInfo}`;
-    console.log('=== DESIGN EXPERIMENT REQUEST ===');
-    console.log('Owner Email:', ownerEmail || 'Not provided');
-    console.log('Full User Message to Model:');
-    console.log(userMessage);
-    console.log('=====================================');
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -114,18 +108,8 @@ export async function POST({ request }) {
     });
 
     const raw = completion.choices[0]?.message?.content ?? '{}';
-    
-    // Log the raw response from the model
-    console.log('=== AI MODEL RESPONSE ===');
-    console.log('Raw response:', raw);
-    console.log('=========================');
-    
+
     const parsed = JSON.parse(raw);
-    
-    // Log the parsed response
-    console.log('=== PARSED RESPONSE ===');
-    console.log('Parsed JSON:', JSON.stringify(parsed, null, 2));
-    console.log('=======================');
 
     // set defaults if null or undefined
     if (!parsed.challenge) parsed.challenge = 'Need more info to define the challenge';
@@ -134,12 +118,7 @@ export async function POST({ request }) {
     if (!parsed.measure) parsed.measure = 'Need more info to define the measure';
 
     const result = Experiment.parse(parsed); // runtime validation
-    
-    // Log the final validated result
-    console.log('=== FINAL VALIDATED RESULT ===');
-    console.log('Result:', JSON.stringify(result, null, 2));
-    console.log('===============================');
-    
+
     return json(result);                       // -> HTTP 200 + JSON
 
   } catch (err: any) {

@@ -150,7 +150,6 @@
         if (!res2.ok) {
           console.error('Save failed:', saved?.error);
         } else {
-          console.log('Saved relationship id:', saved.id);
           // Navigate back to dashboard with email parameter and modal state
           goto(`/?email=${encodeURIComponent(ownerEmail)}&openModal=map&selectNode=connection`);
         }
